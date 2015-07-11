@@ -497,6 +497,7 @@ extern struct cpufreq_governor cpufreq_gov_conservative;
 extern struct cpufreq_governor cpufreq_gov_interactive;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_interactive)
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_ALUCARD)
 extern struct cpufreq_governor cpufreq_gov_alucard;
@@ -505,6 +506,10 @@ extern struct cpufreq_governor cpufreq_gov_alucard;
 extern struct cpufreq_governor cpufreq_gov_darkness;
 #define CPUFREQ_DEFAULT_GOVERNOR (&cpufreq_gov_darkness)
 >>>>>>> 3dc411822e... Add Darkness Governor with Optimizations
+=======
+extern struct cpufreq_governor cpufreq_gov_alucard;
+#define CPUFREQ_DEFAULT_GOVERNOR  (&cpufreq_gov_alucard)
+>>>>>>> 55105c02f8... cpufreq: alucard: bring up
 #endif
 
 /*********************************************************************
