@@ -168,7 +168,8 @@ int cpufreq_frequency_table_target(struct cpufreq_policy *policy,
 					suboptimal.driver_data = i;
 				}
 			}
-			break;
+			break
+>
 		case CPUFREQ_RELATION_C:
 			diff = abs(freq - target_freq);
 			if (diff < optimal.frequency ||

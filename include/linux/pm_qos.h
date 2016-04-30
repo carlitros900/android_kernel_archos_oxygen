@@ -39,6 +39,7 @@ enum pm_qos_flags_status {
 #define PM_QOS_LATENCY_TOLERANCE_NO_CONSTRAINT	(-1)
 #define PM_QOS_LATENCY_ANY			((s32)(~(__u32)0 >> 1))
 
+#define PM_QOS_DVFS_RESPONSE_LATENCY 		7
 #define PM_QOS_FLAG_NO_POWER_OFF	(1 << 0)
 #define PM_QOS_FLAG_REMOTE_WAKEUP	(1 << 1)
 
