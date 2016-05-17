@@ -144,7 +144,7 @@ int cpuidle_enter_state(struct cpuidle_device *dev, struct cpuidle_driver *drv,
 		clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_EXIT, &dev->cpu);
 	}
 
-	if (!cpuidle_state_is_coupled(dev, drv, entered_state))
+	if (!cpuidle_state_is_coupled(dev, drv, index))
 		local_irq_enable();
 
 	diff = ktime_to_us(ktime_sub(time_end, time_start));
