@@ -581,6 +581,7 @@ void arch_reset(char mode, const char *cmd)
 	} else if (cmd && !strcmp(cmd, "rpmbpk")) {
 		mtk_wd_SetNonResetReg2(0,1);
 	} else {
+		rtc_mark_reboot();
 		reboot = 1;
 	}
 

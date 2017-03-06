@@ -34,6 +34,18 @@ extern void rtc_enable_writeif(void);
 extern void rtc_disable_writeif(void);
 
 extern void rtc_mark_recovery(void);
+/*shaohui add for RPMB trigger*/
+#ifdef CONFIG_LCT_RPMB_TRIGGER
+extern void rtc_mark_rpmb(void);
+#endif
+/*shaohui add end`*/
+/*caozhg add for alt status*/
+#ifdef CONFIG_LCT_CHR_ALT_TEST_SUPPORT
+extern void rtc_mark_alt(void);
+extern int get_rtc_mark_alt(void);
+#endif
+/*caozhg add end*/
+extern void rtc_mark_reboot(void);
 #if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)
 extern void rtc_mark_kpoc(void);
 #endif/*if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)*/
@@ -56,6 +68,7 @@ extern void mt_power_off(void);
 #define rtc_enable_writeif()		do {} while (0)
 #define rtc_disable_writeif()		do {} while (0)
 #define rtc_mark_recovery()             do {} while (0)
+#define rtc_mark_reboot()             do {} while (0)
 #if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)
 #define rtc_mark_kpoc()                 do {} while (0)
 #endif/*if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)*/
