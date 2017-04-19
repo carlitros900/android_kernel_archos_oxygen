@@ -102,6 +102,7 @@ void sdcardfs_drop_shared_icache(struct super_block *sb, struct inode *lower_ino
 	}
 	spin_unlock(&sdcardfs_list_lock);
 }
+<<<<<<< HEAD
 
 void sdcardfs_truncate_share(struct super_block *sb, struct inode *lower_inode, loff_t newsize)
 {
@@ -142,6 +143,8 @@ void sdcardfs_truncate_share(struct super_block *sb, struct inode *lower_inode, 
 	}
 	spin_unlock(&sdcardfs_list_lock);
 }
+=======
+>>>>>>> 2e30396349... sdcardfs: drop shared caches to reclaim inodes
 
 /* final actions when unmounting a file system */
 static void sdcardfs_put_super(struct super_block *sb)
