@@ -221,9 +221,13 @@ void sdcardfs_drop_shared_icache(struct super_block *, struct inode *);
 void sdcardfs_drop_sb_icache(struct super_block *, unsigned long);
 void sdcardfs_add_super(struct sdcardfs_sb_info *, struct super_block *);
 <<<<<<< HEAD
+<<<<<<< HEAD
 void sdcardfs_truncate_share(struct super_block *, struct inode *, loff_t newsize);
 =======
 >>>>>>> 2e30396349... sdcardfs: drop shared caches to reclaim inodes
+=======
+void sdcardfs_truncate_share(struct super_block *, struct inode *, loff_t newsize);
+>>>>>>> 8dcf378ccb... sdcardfs: truncate inode for all 3 mount points.
 
 /*
  * inode to private data
