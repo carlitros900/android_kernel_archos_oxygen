@@ -659,6 +659,7 @@ fail:
 	value = get_ready_ep(iocb->ki_filp->f_flags, epdata);
 	if (unlikely(value < 0)) {
 		kfree(priv);
+		value = -ENOMEM;
 		goto fail;
 	}
 
