@@ -76,6 +76,7 @@
 #include <linux/string.h>
 #include <uapi/linux/limits.h>
 
+#include <linux/uaccess.h>
 #include "audit.h"
 
 /* flags stating the success for a syscall */
