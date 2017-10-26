@@ -1151,9 +1151,10 @@ static int msdc_card_busy(struct mmc_host *mmc)
 {
 	struct msdc_host *host = mmc_priv(mmc);
 	u32 ret;
+        u32 status;
 
 	pm_runtime_get_sync(host->dev);
-	u32 status = readl(host->base + MSDC_PS);
+	status = readl(host->base + MSDC_PS);
 
 	/* check if any pin between dat[0:3] is low */
 	ret = (((status >> 16) & 0xf) != 0xf);
