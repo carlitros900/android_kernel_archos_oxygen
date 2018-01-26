@@ -233,7 +233,7 @@ static long tpd_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 	void __user *data;
 
 	long err = 0;
-	int result=0;
+	/* int result=0; */
 	printk("xingkun test1 %s\n",__func__); 
 	if (_IOC_DIR(cmd) & _IOC_READ)
 		err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
@@ -289,7 +289,7 @@ static long tpd_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 				break;
 			}
 			break;
-		case TPD_GET_ATA_PARA :
+		/*case TPD_GET_ATA_PARA :
 			data = (void __user *) arg;
 			
 			result = ctp_factory_test();
@@ -303,7 +303,7 @@ static long tpd_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 				err = -EFAULT;
                 break;
 			}
-			break;
+			break;*/
 	default:
 		pr_err("tpd: unknown IOCTL: 0x%08x\n", cmd);
 		err = -ENOIOCTLCMD;
