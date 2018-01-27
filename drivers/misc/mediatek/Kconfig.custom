@@ -1,0 +1,279 @@
+menu "Other Configurations"
+
+config MTK_WITH_EXTERNAL_CHARGER_IC
+        bool "MTK_WITH_EXTERNAL_CHARGER_IC"
+        default n
+
+config MTK_TOUCH_T8515B_WJ626_V10
+	bool "CONFIG_MTK_TOUCH_T8515B_WJ626_V10"
+	default n
+config MTK_TOUCH_T8515A_RJ899_FPC_V10
+	bool "CONFIG_MTK_TOUCH_T8515A_RJ899_FPC_V10"
+	default n
+config MTK_TOUCH_T8880_DXP2_0350_080A_PG
+	bool "MTK_TOUCH_T8880_DXP2_0350_080A_PG"
+	default n
+config MTK_TOUCH_T8515C_C178296A1
+	bool "CONFIG_MTK_TOUCH_T8515C_C178296A1"
+	default n
+config MTK_TOUCH_T8811A_DXP2_0515_101A
+	bool "CONFIG_MTK_TOUCH_T8811A_DXP2_0515_101A"
+	default n
+config MTK_TOUCH_T8811A_MF_850_101F
+	bool "CONFIG_MTK_TOUCH_T8811A_MF_850_101F"
+	default n
+config MTK_TOUCH_T8811A_MF_850_101F_3
+	bool "CONFIG_MTK_TOUCH_T8811A_MF_850_101F_3"
+	default n
+config MTK_TOUCH_T8570_D100_V00_LD
+	bool "CONFIG_MTK_TOUCH_T8570_D100_V00_LD"
+	default n
+config MTK_TOUCH_WJ1238_FPC_V10
+	bool "CONFIG_MTK_TOUCH_WJ1238_FPC_V10"
+	default n
+	
+config MTK_ONLY_USB_DC
+	bool "CONFIG_MTK_ONLY_USB_DC"
+	default n
+
+config MTK_DC_DET_VIA_GPIO
+	bool "CONFIG_MTK_DC_DET_VIA_GPIO"
+	default n
+
+config MTK_DC_DET_VIA_ADC
+	bool "CONFIG_MTK_DC_DET_VIA_ADC"
+	default n
+
+config LARGE_CURRENT_NO_SWITCH
+	bool "CONFIG_LARGE_CURRENT_NO_SWITCH"
+	default n
+
+config HUGE_CURRENT_NO_SWITCH
+	bool "CONFIG_HUGE_CURRENT_NO_SWITCH"
+	default n
+
+config EMDOOR_TP_ATA_TEST
+	bool "Support test tp in ATA"
+	default n
+config USER_CW2015_GAUGE       
+       bool "USER_CW2015_GAUGE"
+       default n
+config MTK_CHARGER_CEC_AUTH
+        bool "MTK_CHARGER_CEC_AUTH SUPPORT"
+        default n
+#//add by senbin
+config MTK_TOUCH_T8370_XCL_S70025K_2_0
+	bool "CONFIG_MTK_TOUCH_T8370_XCL_S70025K_2_0"
+	default n
+
+#//add by senbin
+config MTK_TOUCH_T8811A_FPCA_10A41_V01
+	bool "CONFIG_MTK_TOUCH_T8811A_FPCA_10A41_V01"
+	default n
+	
+
+#//add by tubao
+config MTK_TOUCH_T8611_3675_PB101JG2434
+	bool "CONFIG_MTK_TOUCH_T8611_3675_PB101JG2434"
+	default n
+#//add by tubao
+config MTK_TOUCH_T8611_3675_PB101JG2484
+	bool "CONFIG_MTK_TOUCH_T8611_3675_PB101JG2484"
+	default n
+#//add by tubao
+config MTK_TOUCH_T8611_DXP2_0339_101A
+	bool "CONFIG_MTK_TOUCH_T8611_DXP2_0339_101A"
+	default n
+#//add by tubao
+config MTK_TOUCH_T8611_DXG2J2_0531_101C
+	bool "CONFIG_MTK_TOUCH_T8611_DXG2J2_0531_101C"
+	default n
+#//add by alex.zheng
+config MTK_TOUCH_T8611_DXP2J2_0753_101A
+	bool "CONFIG_MTK_TOUCH_T8611_DXP2J2_0753_101A"
+	default n
+#//add by alex.zheng
+config MTK_TOUCH_T8611_HXD_1098
+	bool "CONFIG_MTK_TOUCH_T8611_HXD_1098"
+	default n
+# add by alex.zheng
+config MTK_TOUCH_T8611_PB101JG3083
+	bool "CONFIG_MTK_TOUCH_T8611_PB101JG3083"
+	default n
+# add by alex.zheng
+config MTK_TOUCH_T8611_PB101JG3085
+	bool "CONFIG_MTK_TOUCH_T8611_PB101JG3085"
+	default n
+#//add by tubao
+config MTK_OV8858_LEAD_TO_NULL_POINTER
+	bool "CONFIG_MTK_OV8858_LEAD_TO_NULL_POINTER"
+	default n
+#//add by tubao
+config MTK_EXTAMP_PA_CONTROL_GPIO
+	bool "CONFIG_MTK_EXTAMP_PA_CONTROL_GPIO"
+	default n
+#//add by tubao
+config MTK_TOUCH_T8611_HD91_V00
+	bool "CONFIG_MTK_TOUCH_T8611_HD91_V00"
+	default n
+#//add by tubao
+config MTK_TOUCH_T8611_3675_HXD_1055
+	bool "CONFIG_MTK_TOUCH_T8611_3675_HXD_1055"
+	default n
+#//add by tubao
+config MTK_TOUCH_T8611_HXD_1076
+	bool "CONFIG_MTK_TOUCH_T8611_HXD_1076"
+	default n
+#//add by tubao
+config MTK_TOUCH_T8611_PB101JG3261
+	bool "CONFIG_MTK_TOUCH_T8611_PB101JG3261"
+	default n
+#//add by tubao
+config MTK_TOUCH_T8611_PB101JG3289
+	bool "CONFIG_MTK_TOUCH_T8611_PB101JG3289"
+	default n
+#//add by alex
+config MTK_TOUCH_T8611_PB101GGJ3497
+	bool "CONFIG_MTK_TOUCH_T8611_PB101GGJ3497"
+	default n
+#//add by alex
+config MTK_TOUCH_T8611_3676_HD_1055A6
+	bool "CONFIG_MTK_TOUCH_T8611_3676_HD_1055A6"
+	default n
+# add by senbin.chen
+config MTK_TOUCH_T8611_FPCA_10A23_V01
+	bool "CONFIG_MTK_TOUCH_T8611_FPCA_10A23_V01"
+	default n
+#//add by tubao
+config MTK_TOUCH_T8511_DPTTECH_10112_0A5055A
+	bool "CONFIG_MTK_TOUCH_T8511_DPTTECH_10112_0A5055A"
+	default n
+
+config MTK_TOUCH_T8511_HOTATOUCH_C145254B1_DRFPC253T_V10
+	bool "CONFIG_MTK_TOUCH_T8511_HOTATOUCH_C145254B1_DRFPC253T_V10"
+	default n
+
+config MTK_TOUCH_T8511_HOTATOUCH_C145254A1_DRFPC221T_V20
+	bool "CONFIG_MTK_TOUCH_T8511_HOTATOUCH_C145254A1_DRFPC221T_V20"
+	default n
+
+config MTK_TOUCH_T8512_YJ391FPC_V0_FHX_15X10
+	bool "CONFIG_MTK_TOUCH_T8512_YJ391FPC_V0_FHX_15X10"
+	default n
+
+config MTK_TOUCH_T8512_PG1010_038_A0_FPC_HXS_26X18
+	bool "CONFIG_MTK_TOUCH_T8512_PG1010_038_A0_FPC_HXS_26X18"
+	default n
+
+config MTK_TOUCH_T8511_ZP9193_101_VER_01_FCT_1407
+	bool "CONFIG_MTK_TOUCH_T8511_ZP9193_101_VER_01_FCT_1407"
+	default n
+
+config MTK_TOUCH_T8511_ZP9193_101_VER_01_FCT_1407_ARCHOS
+	bool "CONFIG_MTK_TOUCH_T8511_ZP9193_101_VER_01_FCT_1407_ARCHOS"
+	default n
+config MTK_TOUCH_T8990_MF_539_090F
+	bool "CONFIG_MTK_TOUCH_T8990_MF_539_090F"
+	default n
+	
+config MTK_I2C_EXTENSION
+	bool "CONFIG_MTK_I2C_EXTENSION"
+	default n
+
+config RGB_T8370
+        bool "CONFIG_RGB_T8370"
+        default n
+
+config MTK_CHARGER_LED_SUPPORT
+        bool "CONFIG_MTK_CHARGER_LED_SUPPORT"
+        default n
+config MTK_USB_HOST_KEEP_WAKEUPLOCK
+        bool "CONFIG_MTK_USB_HOST_KEEP_WAKEUPLOCK"
+		 default n
+config EMDOOR_T8611B_PROJECT	
+        bool "CONFIG_EMDOOR_T8611B_PROJECT	"
+		 default n		 		 
+config USBHUB_SUSPEND_NEED_RESET
+	bool "CONFIG_USBHUB_SUSPEND_NEED_RESET"
+	default n
+
+config USB_MTK_CHARGER_DETECT
+       tristate "MediaTek MUSB charger detect"
+       default n
+
+config MTK_CHARGER_CEC_AUTH
+       tristate "CONFIG_MTK_CHARGER_CEC_AUTH"
+       default n
+
+config MTK_GSLX680_8011A_8INCH_1280x800_20160617
+       tristate "CONFIG_MTK_GSLX680_8011A_8INCH_1280x800_20160617"
+       default n
+config MTK_TOUCH_FPC_70A53_V01
+       tristate "CONFIG_MTK_TOUCH_FPC_70A53_V01"
+       default n
+
+config LCM_VDD3V3_SELECT_VIBR
+       tristate "CONFIG_LCM_VDD3V3_SELECT_VIBR"
+       default n
+
+config CHARGE_PIN_REVERT
+       tristate "CONFIG_CHARGE_PIN_REVERT"
+       default n
+
+config MT_ENG_BUILD
+       tristate "CONFIG_MT_ENG_BUILD"
+       default n
+
+config LVDS_POWERON_PARAM_CONFIG_IGNORE
+       bool "CONFIG_LVDS_POWERON_PARAM_CONFIG_IGNORE"
+       default n
+config MTK_TOUCH_T8611_OLM_101C0832_GG
+		bool "CONFIG_MTK_TOUCH_T8611_OLM_101C0832_GG"
+		default n
+config MTK_TOUCH_XC_PG1010_038_A0_FPC
+       bool "CONFIG_MTK_TOUCH_XC_PG1010_038_A0_FPC"
+       default n
+config MTK_TOUCH_FPCA_80A75_V01
+       bool "MTK_TOUCH_FPCA_80A75_V01"
+       default n
+
+config MTK_TOUCH_XINLILAI_1696_01_12_101D_18X27
+       bool "CONFIG_MTK_TOUCH_XINLILAI_1696_01_12_101D_18X27"
+       default n
+
+config SOFTWARE_MMC_GYROSCOPE
+	   tristate "CONFIG_SOFTWARE_MMC_GYROSCOPE"
+	   default n
+
+config MTK_BYPASS_MASKED_EVENT_HAPPEN_BUG
+	   tristate "CONFIG_MTK_BYPASS_MASKED_EVENT_HAPPEN_BUG"
+	   default n
+
+config HDMI_5V_NEED_POWER_OFF
+	   tristate "CONFIG_HDMI_5V_NEED_POWER_OFF"
+	   default n
+
+config GSL5680_ATA_TEST
+	   tristate "CONFIG_GSL5680_ATA_TEST"
+	   default n
+
+config LIMIT_CPU_714MHZ_WHEN_THERMAL_UP_80C
+	   tristate "CONFIG_LIMIT_CPU_714MHZ_WHEN_THERMAL_UP_80C"
+	   default n
+
+config POWERUP_I2C_WITH_EDP
+	   tristate "CONFIG_POWERUP_I2C_WITH_EDP"
+	   default n
+
+config KPD_PMIC_LPPWF
+       bool "CONFIG_KPD_PMIC_LPPWF"
+       default n
+
+config BAT_CHR_FULL_STILL_CHARGING
+       bool "CONFIG_BAT_CHR_FULL_STILL_CHARGING"
+       default n
+config EMDOOR_LCM_BRIGHTNESS_COMPATIBLE
+       bool "CONFIG_EMDOOR_LCM_BRIGHTNESS_COMPATIBLE"
+       default n
+
+endmenu

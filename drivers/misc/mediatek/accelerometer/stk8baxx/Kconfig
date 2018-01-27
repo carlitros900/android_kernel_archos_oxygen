@@ -1,0 +1,4 @@
+
+config MTK_STK8BAXX
+	bool "STK8BAXX for MediaTek package"
+	default n

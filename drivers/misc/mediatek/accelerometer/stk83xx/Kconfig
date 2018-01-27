@@ -1,0 +1,4 @@
+
+config MTK_STK83XX
+	bool "STK83XX for MediaTek package"
+	default n

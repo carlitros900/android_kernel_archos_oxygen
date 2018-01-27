@@ -1,0 +1,660 @@
+/*************************
+ * Customized Battery Setting dtsi file
+*************************/
+&bat_comm {
+	gpio22_dc_det = <&pio 22 0>;
+	gpio85_set_chr_set = <&pio 85 0>;
+	gpio28_spec_cur_select = <&pio 28 0>;
+	/* cust_charging.h */
+	/* stop charging while in talking mode */
+	stop_charging_in_takling = <1>;
+	talking_recharge_voltage = <3800>;
+	talking_sync_time = <60>;
+
+	/* Battery Temperature Protection */
+	mtk_temperature_recharge_support = <1>;
+	max_charge_temperature = <50>;
+	max_charge_temperature_minus_x_degree = <47>;
+	min_charge_temperature = <0>;
+	min_charge_temperature_plus_x_degree = <6>;
+	err_charge_temperature = <0xff>;
+
+	/* Linear Charging Threshold */
+	v_pre2cc_thres = <3400>;	/* unit: mV */
+	v_cc2topoff_thres = <4050>;
+	recharging_voltage = <4110>;
+	charging_full_current = <80>;	/* unit: mA */
+
+	/* Charging Current Setting */
+	config_usb_if = <0>;
+	usb_charger_current_suspend = <0>;	/* Unit: 0.01 mA */
+	usb_charger_current_unconfigured = <7000>;	/* Unit: 0.01 mA */
+	usb_charger_current_configured = <50000>;	/* Unit: 0.01 mA */
+	usb_charger_current = <120000>;	/* Unit: 0.01 mA */
+	ac_charger_current = <120000>;	/* Unit: 0.01 mA */
+	non_std_ac_charger_current = <50000>;	/* Unit: 0.01 mA */
+	charging_host_charger_current = <65000>;	/* Unit: 0.01 mA */
+	apple_0_5a_charger_current = <50000>;	/* Unit: 0.01 mA */
+	apple_1_0a_charger_current = <65000>;	/* Unit: 0.01 mA */
+	apple_2_1a_charger_current = <80000>;	/* Unit: 0.01 mA */
+
+	/* charger error check */
+	bat_low_temp_protect_enable = <0>;
+	v_charger_enable = <0>;	/* 1:on , 0:off */
+	v_charger_max = <6500>;	/* unit: mV */
+	v_charger_min = <4400>;
+
+	/*  Tracking TIME */
+	onehundred_percent_tracking_time = <1800>;	/* Unit: second */
+	npercent_tracking_time = <200>;	/* Unit: second */
+	sync_to_real_tracking_time = <300>;	/* Unit: second */
+	v_0percent_tracking = <3470>;	/* Unit: mV */
+
+	/* High battery support */
+	high_battery_voltage_support = <0>;
+};
+
+&bat_meter {
+	/* cust_battery_meter.h */
+	/* ADC resistor  */
+	r_bat_sense = <4>;
+	r_i_sense = <4>;
+	r_charger_1 = <330>;
+	r_charger_2 = <39>;
+	temperature_t0 = <110>;
+	temperature_t1 = <0>;
+	temperature_t2 = <25>;
+	temperature_t3 = <50>;
+	temperature_t = <255>;	/* this should be fixed, never change the value */
+	fg_meter_resistance = <0>;
+
+	/* Qmax for 0mA */
+	q_max_pos_50 = <4063>;
+	q_max_pos_25 = <4063>;
+	q_max_pos_0 = <4063>;
+	q_max_neg_10 = <4063>;
+	/* Qmax for 600mA, said high current */
+	q_max_pos_50_h_current = <3630>;
+	q_max_pos_25_h_current = <3630>;
+	q_max_pos_0_h_current = <3630>;
+	q_max_neg_10_h_current = <3630>;
+	/* Discharge percentage, 1: D5, 0: D2 */
+	oam_d5 = <1>;
+
+	change_tracking_point = <1>;
+	/* SW OCV tracking setting */
+	cust_tracking_point = <14>;
+	cust_r_sense = <200>;
+	cust_hw_cc = <0>;
+	aging_tuning_value = <100>;
+	cust_r_fg_offset = <0>;
+	ocv_board_compesate = <0>;
+	r_fg_board_base = <1000>;
+	r_fg_board_slope = <1000>;
+	car_tune_value = <89>;
+
+	/* HW Fuel gague  */
+	current_detect_r_fg = <10>;	/* Unit: mA */
+	minerroroffset = <1000>;
+	fg_vbat_average_size = <18>;
+	r_fg_value = <20>;	/* Unit: mOhm */
+
+	cust_poweron_delta_capacity_tolrance = <80>;
+	cust_poweron_low_capacity_tolrance = <0>;
+	cust_poweron_max_vbat_tolrance = <70>;
+	cust_poweron_delta_vbat_tolrance = <60>;
+	cust_poweron_delta_hw_sw_ocv_capacity_tolrance = <10>;
+
+	/* Fixed battery temperature */
+	fixed_tbat_25 = <1>;
+	/* Dynamic change wake up period of battery thread when suspend */
+	vbat_normal_wakeup = <3600>;	/* Unit: mV */
+	vbat_low_power_wakeup = <3500>;	/* Unit: mV */
+	normal_wakeup_period = <5400>;	/* Unit: second */
+	low_power_wakeup_period = <300>;	/* Unit: second */
+	close_poweroff_wakeup_period = <30>;	/* Unit: second */
+
+	rbat_pull_up_r = <16900>;
+	rbat_pull_up_volt = <1800>;
+
+	batt_temperature_table_num = <17>;
+	batt_temperature_table = <
+			    (-20) 75022
+			    (-15) 57926
+			    (-10) 45168
+			    (-5) 35548
+			    0 28224
+			    5 22595
+			    10 18231
+			    15 14820
+			    20 12133
+			    25 10000 30 8295 35 6922 40 5810 45 4903 50 4160 55 3547 60 3039>;
+
+	battery_profile_t0_num = <64>;
+	battery_profile_t0 = <0 4189
+				2     4164
+				3     4146
+				5     4128
+				7     4112
+				8     4097
+				10    4083
+				11    4070
+				13    4056
+				15    4042
+				16    4028
+				18    4015
+				20    4002
+				21    3992
+				23    3981
+				24    3971
+				26    3961
+				28    3950
+				29    3940
+				31    3931
+				33    3922
+				34    3914
+				36    3905
+				37    3898
+				39    3888
+				41    3877
+				42    3866
+				44    3853
+				46    3842
+				47    3832
+				49    3824
+				51    3817
+				52    3811
+				54    3806
+				55    3801
+				57    3797
+				59    3792
+				60    3789
+				62    3786
+				64    3783
+				65    3780
+				67    3778
+				68    3776
+				70    3774
+				72    3773
+				73    3770
+				75    3767
+				77    3763
+				78    3758
+				80    3752
+				82    3746
+				83    3741
+				85    3736
+				86    3730
+				88    3722
+				90    3712
+				91    3704
+				93    3694
+				95    3685
+				96    3680
+				98    3673
+				99    3663
+				101   3625
+				103   3552>;
+
+	battery_profile_t1_num = <64>;
+	battery_profile_t1 = <0 4189
+				2     4164
+				3     4146
+				5     4128
+				7     4112
+				8     4097
+				10    4083
+				11    4070
+				13    4056
+				15    4042
+				16    4028
+				18    4015
+				20    4002
+				21    3992
+				23    3981
+				24    3971
+				26    3961
+				28    3950
+				29    3940
+				31    3931
+				33    3922
+				34    3914
+				36    3905
+				37    3898
+				39    3888
+				41    3877
+				42    3866
+				44    3853
+				46    3842
+				47    3832
+				49    3824
+				51    3817
+				52    3811
+				54    3806
+				55    3801
+				57    3797
+				59    3792
+				60    3789
+				62    3786
+				64    3783
+				65    3780
+				67    3778
+				68    3776
+				70    3774
+				72    3773
+				73    3770
+				75    3767
+				77    3763
+				78    3758
+				80    3752
+				82    3746
+				83    3741
+				85    3736
+				86    3730
+				88    3722
+				90    3712
+				91    3704
+				93    3694
+				95    3685
+				96    3680
+				98    3673
+				99    3663
+				101   3625
+				103   3552>;
+
+	battery_profile_t2_num = <64>;
+	battery_profile_t2 = <0 4189
+				2     4164
+				3     4146
+				5     4128
+				7     4112
+				8     4097
+				10    4083
+				11    4070
+				13    4056
+				15    4042
+				16    4028
+				18    4015
+				20    4002
+				21    3992
+				23    3981
+				24    3971
+				26    3961
+				28    3950
+				29    3940
+				31    3931
+				33    3922
+				34    3914
+				36    3905
+				37    3898
+				39    3888
+				41    3877
+				42    3866
+				44    3853
+				46    3842
+				47    3832
+				49    3824
+				51    3817
+				52    3811
+				54    3806
+				55    3801
+				57    3797
+				59    3792
+				60    3789
+				62    3786
+				64    3783
+				65    3780
+				67    3778
+				68    3776
+				70    3774
+				72    3773
+				73    3770
+				75    3767
+				77    3763
+				78    3758
+				80    3752
+				82    3746
+				83    3741
+				85    3736
+				86    3730
+				88    3722
+				90    3712
+				91    3704
+				93    3694
+				95    3685
+				96    3680
+				98    3673
+				99    3663
+				101   3625
+				103   3552>;
+
+	battery_profile_t3_num = <64>;
+	battery_profile_t3 = <0 4189
+				2     4164
+				3     4146
+                                5     4128
+                                7     4112
+                                8     4097
+                                10    4083
+                                11    4070
+                                13    4056
+                                15    4042
+                                16    4028
+                                18    4015
+                                20    4002
+                                21    3992
+                                23    3981
+                                24    3971
+                                26    3961
+                                28    3950
+                                29    3940
+                                31    3931
+                                33    3922
+                                34    3914
+                                36    3905
+                                37    3898
+                                39    3888
+                                41    3877
+                                42    3866
+                                44    3853
+                                46    3842
+                                47    3832
+                                49    3824
+                                51    3817
+                                52    3811
+                                54    3806
+                                55    3801
+                                57    3797
+                                59    3792
+                                60    3789
+                                62    3786
+                                64    3783
+                                65    3780
+                                67    3778
+                                68    3776
+                                70    3774
+                                72    3773
+                                73    3770
+                                75    3767
+                                77    3763
+                                78    3758
+                                80    3752
+                                82    3746
+                                83    3741
+                                85    3736
+                                86    3730
+                                88    3722
+                                90    3712
+                                91    3704
+                                93    3694
+                                95    3685
+                                96    3680
+                                98    3673
+                                99    3663
+                                101   3625
+                                103   3552>;
+
+	r_profile_t0_num = <64>;
+	r_profile_t0 = <89 4189
+				89    4164
+                	        89    4146
+                	        88    4128
+                	        89    4112
+                	        89    4097
+                	        90    4083
+                	        91    4070
+                	        92    4056
+                	        92    4042
+                	        92    4028
+                	        92    4015
+                	        93    4002
+                	        95    3992
+                	        94    3981
+                	        95    3971
+                	        97    3961
+                	        95    3950
+                	        97    3940
+                	        98    3931
+                	        98    3922
+                	        100   3914
+                	        101   3905
+                	        103   3898
+                	        102   3888
+                	        101   3877
+                	        98    3866
+                	        94    3853
+                	        93    3842
+                	        91    3832
+                	        89    3824
+                	        90    3817
+                	        90    3811
+                	        90    3806
+                	        90    3801
+                	        91    3797
+                	        91    3792
+                	        92    3789
+                	        93    3786
+                	        93    3783
+                	        93    3780
+                	        94    3778
+				94    3776
+				95    3774
+				96    3773
+				96    3770
+				97    3767
+				96    3763
+				94    3758
+				94    3752
+				93    3746
+				93    3741
+				93    3736
+				94    3730
+				93    3722
+				93    3712
+				94    3704
+				93    3694
+				93    3685
+				97    3680
+				101   3673
+				108   3663
+				108   3625
+				109   3552>;
+
+	r_profile_t1_num = <64>;
+	r_profile_t1 = <89 4189
+				89    4164
+                                89    4146
+                                88    4128
+                                89    4112
+                                89    4097
+                                90    4083
+                                91    4070
+                                92    4056
+                                92    4042
+                                92    4028
+                                92    4015
+                                93    4002
+                                95    3992
+                                94    3981
+                                95    3971
+                                97    3961
+                                95    3950
+                                97    3940
+                                98    3931
+                                98    3922
+                                100   3914
+                                101   3905
+                                103   3898
+                                102   3888
+                                101   3877
+                                98    3866
+                                94    3853
+                                93    3842
+                                91    3832
+                                89    3824
+                                90    3817
+                                90    3811
+                                90    3806
+                                90    3801
+                                91    3797
+                                91    3792
+                                92    3789
+                                93    3786
+                                93    3783
+                                93    3780
+                                94    3778
+				94    3776
+				95    3774
+				96    3773
+				96    3770
+				97    3767
+				96    3763
+				94    3758
+				94    3752
+				93    3746
+				93    3741
+				93    3736
+				94    3730
+				93    3722
+				93    3712
+				94    3704
+				93    3694
+				93    3685
+				97    3680
+				101   3673
+				108   3663
+				108   3625
+				109   3552>;
+
+	r_profile_t2_num = <64>;
+	r_profile_t2 = <89 4189
+				89    4164
+                                89    4146
+                                88    4128
+                                89    4112
+                                89    4097
+                                90    4083
+                                91    4070
+                                92    4056
+                                92    4042
+                                92    4028
+                                92    4015
+                                93    4002
+                                95    3992
+                                94    3981
+                                95    3971
+                                97    3961
+                                95    3950
+                                97    3940
+                                98    3931
+                                98    3922
+                                100   3914
+                                101   3905
+                                103   3898
+                                102   3888
+                                101   3877
+                                98    3866
+                                94    3853
+                                93    3842
+                                91    3832
+                                89    3824
+                                90    3817
+                                90    3811
+                                90    3806
+                                90    3801
+                                91    3797
+                                91    3792
+                                92    3789
+                                93    3786
+                                93    3783
+                                93    3780
+                                94    3778
+				94    3776
+				95    3774
+				96    3773
+				96    3770
+				97    3767
+				96    3763
+				94    3758
+				94    3752
+				93    3746
+				93    3741
+				93    3736
+				94    3730
+				93    3722
+				93    3712
+				94    3704
+				93    3694
+				93    3685
+				97    3680
+				101   3673
+				108   3663
+				108   3625
+				109   3552>;
+
+	r_profile_t3_num = <64>;
+	r_profile_t3 = <89 4189
+				89    4164
+                                89    4146
+                                88    4128
+                                89    4112
+                                89    4097
+                                90    4083
+                                91    4070
+                                92    4056
+                                92    4042
+                                92    4028
+                                92    4015
+                                93    4002
+                                95    3992
+                                94    3981
+                                95    3971
+                                97    3961
+                                95    3950
+                                97    3940
+                                98    3931
+                                98    3922
+                                100   3914
+                                101   3905
+                                103   3898
+                                102   3888
+                                101   3877
+                                98    3866
+                                94    3853
+                                93    3842
+                                91    3832
+                                89    3824
+                                90    3817
+                                90    3811
+                                90    3806
+                                90    3801
+                                91    3797
+                                91    3792
+                                92    3789
+                                93    3786
+                                93    3783
+                                93    3780
+                                94    3778
+				94    3776
+				95    3774
+				96    3773
+				96    3770
+				97    3767
+				96    3763
+				94    3758
+				94    3752
+				93    3746
+				93    3741
+				93    3736
+				94    3730
+				93    3722
+				93    3712
+				94    3704
+				93    3694
+				93    3685
+				97    3680
+				101   3673
+				108   3663
+				108   3625
+				109   3552>;
+};
