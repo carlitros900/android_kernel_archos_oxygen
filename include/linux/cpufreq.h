@@ -95,7 +95,6 @@ struct cpufreq_policy {
 	struct kobject		kobj;
 	struct completion	kobj_unregister;
 	unsigned int 		util;
-};
 
 	/*
 	 * The rules for this semaphore:
@@ -327,10 +326,6 @@ void cpufreq_notify_utilization(struct cpufreq_policy *policy,
 static inline void cpufreq_verify_within_limits(struct cpufreq_policy *policy,
 		unsigned int min, unsigned int max)
 
-void cpufreq_notify_utilization(struct cpufreq_policy *policy,
-		unsigned int load);
-
-static inline void cpufreq_verify_within_limits(struct cpufreq_policy *policy, unsigned int min, unsigned int max)
 {
 	if (policy->min < min)
 		policy->min = min;
@@ -398,7 +393,6 @@ static inline int cpufreq_register_notifier(struct notifier_block *nb,
 }
 static inline int cpufreq_unregister_notifier(struct notifier_block *nb,
 						unsigned int list)
-#endif
 
 {
 	return 0;
