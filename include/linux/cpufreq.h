@@ -94,6 +94,8 @@ struct cpufreq_policy {
 	struct list_head        policy_list;
 	struct kobject		kobj;
 	struct completion	kobj_unregister;
+	unsigned int 		util;
+};
 
 	/*
 	 * The rules for this semaphore:
@@ -152,6 +154,7 @@ void cpufreq_sysfs_remove_file(const struct attribute *attr);
 unsigned int cpufreq_get(unsigned int cpu);
 unsigned int cpufreq_quick_get(unsigned int cpu);
 unsigned int cpufreq_quick_get_max(unsigned int cpu);
+unsigned int cpufreq_quick_get_util(unsigned int cpu);
 void disable_cpufreq(void);
 
 u64 get_cpu_idle_time(unsigned int cpu, u64 *wall, int io_busy);
@@ -323,6 +326,11 @@ void cpufreq_notify_utilization(struct cpufreq_policy *policy,
 
 static inline void cpufreq_verify_within_limits(struct cpufreq_policy *policy,
 		unsigned int min, unsigned int max)
+
+void cpufreq_notify_utilization(struct cpufreq_policy *policy,
+		unsigned int load);
+
+static inline void cpufreq_verify_within_limits(struct cpufreq_policy *policy, unsigned int min, unsigned int max)
 {
 	if (policy->min < min)
 		policy->min = min;
@@ -390,6 +398,8 @@ static inline int cpufreq_register_notifier(struct notifier_block *nb,
 }
 static inline int cpufreq_unregister_notifier(struct notifier_block *nb,
 						unsigned int list)
+#endif
+
 {
 	return 0;
 }
