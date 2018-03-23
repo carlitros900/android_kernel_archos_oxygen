@@ -209,6 +209,12 @@ config MTK_SM100
 	bool "Software synchronization 64bits objects"
 	default n
 
+config MTK_WIFI_PM_CONTROL
+	tristate "Mediatek Wi-Fi PM Control"
+	default n
+	help
+	Interface to control Wi-Fi Power Saver Modes
+
 source "drivers/misc/mediatek/Kconfig.custom"
 source "drivers/misc/mediatek/gpt/Kconfig"
 source "drivers/misc/mediatek/uart/Kconfig"
