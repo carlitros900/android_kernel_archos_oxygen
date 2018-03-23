@@ -111,5 +111,4 @@ endif
 
 extra-y := $(head-y) vmlinux.lds
 
-obj-y += mako_hotplug.o
 obj-y += alucard_hotplug.o
