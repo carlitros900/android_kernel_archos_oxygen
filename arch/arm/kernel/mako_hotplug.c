@@ -30,7 +30,7 @@
 
 #define MAKO_HOTPLUG "mako_hotplug"
 
-#define DRIVER_ENABLED 1
+#define DRIVER_ENABLED 0
 
 #define DEFAULT_LOAD_THRESHOLD 80
 #define DEFAULT_HIGH_LOAD_COUNTER 10
