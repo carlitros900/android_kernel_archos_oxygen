@@ -138,10 +138,12 @@ static const struct of_device_id jenc_of_ids[] = {
 	{}
 };
 #ifdef JPEG_PM_DOMAIN_ENABLE
+/*
 static const struct of_device_id jdec_of_ids[] = {
 	{.compatible = "mediatek,jpgdec",},
 	{}
 };
+*/
 #endif
 #endif
 

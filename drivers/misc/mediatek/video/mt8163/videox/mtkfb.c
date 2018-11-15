@@ -119,7 +119,9 @@ void mtkfb_log_enable(int enable)
 
 unsigned long fb_pa = 0;
 
+#if 0
 static const struct timeval FRAME_INTERVAL = { 0, 30000 };	/* 33ms */
+#endif
 
 atomic_t has_pending_update = ATOMIC_INIT(0);
 struct fb_overlay_layer video_layerInfo;

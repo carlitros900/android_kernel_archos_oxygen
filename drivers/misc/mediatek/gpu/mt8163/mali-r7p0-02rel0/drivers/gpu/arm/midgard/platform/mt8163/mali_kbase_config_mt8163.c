@@ -86,11 +86,13 @@ extern unsigned int (*mtk_get_gpu_loading_fp)(void);
 
 
 #ifdef CONFIG_OF
+#if 0
 static const struct of_device_id mfg_dt_ids[] = {
 	{.compatible = "mediatek,mt8163-mfg"},
 	{.compatible = "mediatek,midgard-mfg"},
 	{ /* sentinel */ }
 };
+#endif
 
 MODULE_DEVICE_TABLE(of, mfg_dt_ids);
 #endif

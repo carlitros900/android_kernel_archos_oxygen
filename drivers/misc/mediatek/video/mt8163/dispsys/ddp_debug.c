@@ -56,7 +56,9 @@ static struct dentry *debugDir;
 
 static struct dentry *debugfs_dump;
 
+/*
 static const long int DEFAULT_LOG_FPS_WND_SIZE = 30;
+*/
 static int debug_init;
 
 

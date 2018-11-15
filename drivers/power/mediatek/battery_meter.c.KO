@@ -569,7 +569,7 @@ static void __batt_meter_parse_table(const struct device_node *np,
 int __batt_meter_init_cust_data_from_dt(void)
 {
 	struct device_node *np;
-	int num;
+	int num = 0;
 	unsigned int idx, addr, val;
 
 	/* check customer setting */

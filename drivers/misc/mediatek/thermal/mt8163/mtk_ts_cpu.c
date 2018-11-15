@@ -2315,33 +2315,33 @@ static int _adaptive_power(long prev_temp, long curr_temp, unsigned int gpu_load
 			if (curr_temp < TARGET_TJ)
 				return 0;
 
-				triggered = 1;
-				switch (mtktscpu_atm) {
-				case 1:	/* FTL ATM v2 */
-				case 2:	/* CPU_GPU_Weight ATM v2 */
+			triggered = 1;
+			switch (mtktscpu_atm) {
+			case 1:	/* FTL ATM v2 */
+			case 2:	/* CPU_GPU_Weight ATM v2 */
 #if MTKTSCPU_FAST_POLLING
-						total_power =
-							FIRST_STEP_TOTAL_POWER_BUDGET -
-							((curr_temp - TARGET_TJ) * tt_ratio_high_rise +
-							 (curr_temp -
-							  prev_temp) * tp_ratio_high_rise) /
-							(PACKAGE_THETA_JA_RISE * cur_fp_factor);
+					total_power =
+						FIRST_STEP_TOTAL_POWER_BUDGET -
+						((curr_temp - TARGET_TJ) * tt_ratio_high_rise +
+						 (curr_temp -
+						  prev_temp) * tp_ratio_high_rise) /
+						(PACKAGE_THETA_JA_RISE * cur_fp_factor);
 #else
-						total_power =
-							FIRST_STEP_TOTAL_POWER_BUDGET -
-							((curr_temp - TARGET_TJ) * tt_ratio_high_rise +
-							 (curr_temp -
-							  prev_temp) * tp_ratio_high_rise) /
-							PACKAGE_THETA_JA_RISE;
+					total_power =
+						FIRST_STEP_TOTAL_POWER_BUDGET -
+						((curr_temp - TARGET_TJ) * tt_ratio_high_rise +
+						 (curr_temp -
+						  prev_temp) * tp_ratio_high_rise) /
+						PACKAGE_THETA_JA_RISE;
 #endif
-						break;
-				case 0:
-				default:	/* ATM v1 */
-						total_power = FIRST_STEP_TOTAL_POWER_BUDGET;
-				}
-				tscpu_dprintk("start %s Tp %d, Tc %d, Pt %d\n", __func__, (int)prev_temp,
+					break;
+			case 0:
+			default:	/* ATM v1 */
+					total_power = FIRST_STEP_TOTAL_POWER_BUDGET;
+			}
+			tscpu_dprintk("start %s Tp %d, Tc %d, Pt %d\n", __func__, (int)prev_temp,
 						(int)curr_temp, total_power);
-				return P_adaptive(total_power, gpu_loading);
+			return P_adaptive(total_power, gpu_loading);
 		}
 
 		/* Adjust total power budget if necessary */

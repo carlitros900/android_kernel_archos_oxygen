@@ -99,9 +99,12 @@ static inline struct recent_net *recent_pernet(struct net *net)
 static DEFINE_SPINLOCK(recent_lock);
 static DEFINE_MUTEX(recent_mutex);
 
+
 #ifdef CONFIG_PROC_FS
-static const struct file_operations recent_old_fops, recent_mt_fops;
+static const struct file_operations recent_mt_fops;
+/* static const struct file_operations recent_old_fops, recent_mt_fops; */
 #endif
+
 
 static u_int32_t hash_rnd __read_mostly;
 static bool hash_rnd_inited __read_mostly;
@@ -455,6 +458,7 @@ struct recent_iter_state {
 	unsigned int		bucket;
 };
 
+#if 0
 static void *recent_seq_start(struct seq_file *seq, loff_t *pos)
 	__acquires(recent_lock)
 {
@@ -511,14 +515,18 @@ static int recent_seq_show(struct seq_file *seq, void *v)
 	seq_printf(seq, "\n");
 	return 0;
 }
+#endif
 
+/*
 static const struct seq_operations recent_seq_ops = {
 	.start		= recent_seq_start,
 	.next		= recent_seq_next,
 	.stop		= recent_seq_stop,
 	.show		= recent_seq_show,
 };
+*/
 
+/*
 static int recent_seq_open(struct inode *inode, struct file *file)
 {
 	struct recent_iter_state *st;
@@ -530,7 +538,9 @@ static int recent_seq_open(struct inode *inode, struct file *file)
 	st->table    = PDE_DATA(inode);
 	return 0;
 }
+*/
 
+#if 0
 static ssize_t
 recent_mt_proc_write(struct file *file, const char __user *input,
 		     size_t size, loff_t *loff)
@@ -601,7 +611,9 @@ recent_mt_proc_write(struct file *file, const char __user *input,
 	*loff += size + 1;
 	return size + 1;
 }
+#endif
 
+/*
 static const struct file_operations recent_mt_fops = {
 	.open    = recent_seq_open,
 	.read    = seq_read,
@@ -610,6 +622,7 @@ static const struct file_operations recent_mt_fops = {
 	.owner   = THIS_MODULE,
 	.llseek = seq_lseek,
 };
+*/
 
 static int __net_init recent_proc_net_init(struct net *net)
 {

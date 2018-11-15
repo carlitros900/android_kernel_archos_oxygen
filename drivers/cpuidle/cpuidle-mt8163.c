@@ -124,10 +124,12 @@ static struct cpuidle_driver mt8163_cpuidle_driver = {
 
 #ifdef CONFIG_ARM64
 
+/*
 static const struct of_device_id mt8163_idle_state_match[] __initconst = {
 	{ .compatible = "arm,idle-state" },
 	{ },
 };
+*/
 
 /*
  * arm64_idle_init

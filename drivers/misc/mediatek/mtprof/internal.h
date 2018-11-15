@@ -26,7 +26,7 @@ static const struct file_operations mt_##name##_fops = { \
 	.llseek = seq_lseek, \
 	.release = single_release, \
 }; \
-void mt_##name##_switch(int on)
+void mt_##name##_switch(int on);
 
 /*
  * Ease the printing of nsec fields:

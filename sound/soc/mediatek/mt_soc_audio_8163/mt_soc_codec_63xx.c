@@ -105,8 +105,10 @@ static int mAudio_Analog_Mic2_mode = AUDIO_ANALOGUL_MODE_ACC;
 static int mAudio_Analog_Mic3_mode = AUDIO_ANALOGUL_MODE_ACC;
 static int mAudio_Analog_Mic4_mode = AUDIO_ANALOGUL_MODE_ACC;
 
+#if 0
 static const int DC1unit_in_uv = 19184;	/* in uv with 0DB */
 static const int DC1devider = 8;	/* in uv */
+#endif
 /* Headphone DC calibration */
 static int mHpLeftDcCalibration;
 static int mHpRightDcCalibration;
@@ -127,7 +129,9 @@ static unsigned int Speaker_pga_gain = 1;	/* default 0Db. */
 static bool mSpeaker_Ocflag;
 #endif
 
+/*
 static const int mDcOffsetTrimChannel = 9;
+*/
 static bool mInitCodec;
 
 static void Audio_Amp_Change(int channels, bool enable);
@@ -1779,8 +1783,10 @@ static const char * const speaker_PGA_function[] = {
 	"11Db", "12Db", "13Db", "14Db", "15Db", "16Db", "17Db"
 };
 static const char * const speaker_OC_function[] = { "Off", "On" };
+/*
 static const char * const speaker_CS_function[] = { "Off", "On" };
 static const char * const speaker_CSPeakDetecReset_function[] = { "Off", "On" };
+*/
 
 static int Audio_Speaker_Class_Set(struct snd_kcontrol *kcontrol,
 				   struct snd_ctl_elem_value *ucontrol)
@@ -2331,11 +2337,15 @@ static bool TurnOnADcPowerDCCECM(int ADCType, bool enable)
 
 /* here start uplink power function */
 static const char * const ADC_function[] = { "Off", "On" };
+/*
 static const char * const ADC_power_mode[] = { "normal", "lowpower" };
+*/
 static const char * const PreAmp_Mux_function[] = { "OPEN", "IN_ADC1", "IN_ADC2", "IN_ADC3" };
 static const char * const ADC_UL_PGA_GAIN[] = { "-6Db", "0Db", "6Db", "12Db", "18Db", "24Db" };
 static const char * const Pmic_Digital_Mux[] = { "ADC1", "ADC2", "ADC3", "ADC4" };
+/*
 static const char * const Adc_Input_Sel[] = { "idle", "AIN", "Preamp" };
+*/
 
 static const char * const Audio_AnalogMic_Mode[] = {
 	"ACCMODE", "DCCMODE", "DMIC", "DCCECMDIFFMODE", "DCCECMSINGLEMODE"};

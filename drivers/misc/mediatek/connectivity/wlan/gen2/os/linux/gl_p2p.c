@@ -722,6 +722,7 @@ static const iw_handler rP2PIwPrivHandler[] = {
 };
 #endif
 
+#if 0
 static const struct iw_priv_args rP2PIwPrivTable[] = {
 	{
 	 .cmd = IOC_P2P_CFG_DEVICE,
@@ -791,6 +792,7 @@ static const struct iw_priv_args rP2PIwPrivTable[] = {
 	 .get_args = 256,
 	 .name = "get_oid"}
 };
+#endif
 
 #if 0
 const struct iw_handler_def mtk_p2p_wext_handler_def = {

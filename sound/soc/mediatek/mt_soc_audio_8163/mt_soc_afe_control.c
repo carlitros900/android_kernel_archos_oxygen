@@ -166,6 +166,7 @@ static const uint16_t kSideToneCoefficientTable16k[] = {
 	0x7538
 };
 
+/*
 static const uint16_t kSideToneCoefficientTable32k[] = {
 	0xff58, 0x0063, 0x0086, 0x00bf,
 	0x0100, 0x013d, 0x0169, 0x0178,
@@ -176,6 +177,7 @@ static const uint16_t kSideToneCoefficientTable32k[] = {
 	0x08e2, 0x0af7, 0x0cb2, 0x0df0,
 	0x0e96
 };
+*/
 
 /*
  *    function implementation

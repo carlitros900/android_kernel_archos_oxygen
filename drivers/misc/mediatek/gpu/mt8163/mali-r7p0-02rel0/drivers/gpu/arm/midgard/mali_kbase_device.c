@@ -206,7 +206,7 @@ int kbase_device_init(struct kbase_device * const kbdev)
 	for (i = 0; i < FBDUMP_CONTROL_MAX; i++)
 		kbdev->kbase_profiling_controls[i] = 0;
 
-		kbase_debug_assert_register_hook(&kbasep_trace_hook_wrapper, kbdev);
+	kbase_debug_assert_register_hook(&kbasep_trace_hook_wrapper, kbdev);
 
 	atomic_set(&kbdev->ctx_num, 0);
 

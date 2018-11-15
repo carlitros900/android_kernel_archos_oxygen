@@ -64,7 +64,7 @@ static AFE_MEM_CONTROL_T *pHp_impedance_MemControl;
 static const int DCoffsetDefault = 1500;
 static const int DCoffsetVariance = 2;
 
-static const int mDcRangestep = 7;
+//static const int mDcRangestep = 7;
 static const int HpImpedancePhase1Step = 150;
 static const int HpImpedancePhase2Step = 400;
 static const int HpImpedancePhase1AdcValue = 1200;

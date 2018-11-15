@@ -66,7 +66,6 @@ static unsigned int ddp_ms2jiffies(unsigned long ms)
 {
 	return ((ms * HZ + 512) >> 10);
 }
-#endif
 static long disp_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	/*disp_node_struct *pNode = (disp_node_struct *)file->private_data; */
@@ -149,6 +148,7 @@ static int disp_mmap(struct file *file, struct vm_area_struct *a_pstVMArea)
 
 	return 0;
 }
+#endif
 
 struct dispsys_device {
 	void __iomem *regs[DISP_REG_NUM];
@@ -327,6 +327,7 @@ const char *ddp_reg_name_spy(DISP_REG_ENUM reg)
 }
 
 /* Kernel interface */
+/*
 static const struct file_operations disp_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = disp_unlocked_ioctl,
@@ -336,6 +337,7 @@ static const struct file_operations disp_fops = {
 	.read = disp_read,
 	.mmap = disp_mmap
 };
+*/
 
 static int disp_probe(struct platform_device *pdev)
 {

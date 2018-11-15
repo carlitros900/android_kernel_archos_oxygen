@@ -417,6 +417,7 @@ static int freqhopping_debug_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, freqhopping_debug_proc_read, NULL);
 }
 
+/*
 static int freqhopping_dramc_proc_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, g_p_fh_hal_drv->proc.dramc_read, NULL);
@@ -427,6 +428,7 @@ static ssize_t freqhopping_dramc_proc_write(struct file *file, const char *buffe
 {
 	return (ssize_t) (g_p_fh_hal_drv->proc.dramc_write(file, buffer, count, data));
 }
+*/
 
 static int freqhopping_dvfs_proc_open(struct inode *inode, struct file *file)
 {
@@ -462,6 +464,7 @@ static const struct file_operations freqhopping_debug_fops = {
 	.release = single_release,
 };
 
+/*
 static const struct file_operations dramc_fops = {
 	.owner = THIS_MODULE,
 	.open = freqhopping_dramc_proc_open,
@@ -469,6 +472,7 @@ static const struct file_operations dramc_fops = {
 	.write = freqhopping_dramc_proc_write,
 	.release = single_release,
 };
+*/
 
 static const struct file_operations dvfs_fops = {
 	.owner = THIS_MODULE,
