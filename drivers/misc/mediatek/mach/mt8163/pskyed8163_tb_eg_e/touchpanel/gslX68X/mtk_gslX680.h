@@ -6,4 +6,4 @@
 #include "mtk_gslX680_public.h"
 #endif
 
-#include "mtk_gslX680_factory.h"
+//#include "mtk_gslX680_factory.h"

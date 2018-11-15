@@ -173,7 +173,7 @@ config TOUCHSCREEN_MTK_GT9XX
 	  If unsure, say N.
 	  To compile this dirver as a module, choose M here: the
 	  module will be called.
-source "drivers/input/touchscreen/mediatek/gt9xx_mtk/Kconfig
+source "drivers/input/touchscreen/mediatek/gt9xx_mtk/Kconfig"
 
 
 config TOUCHSCREEN_MTK_GSLX6XX

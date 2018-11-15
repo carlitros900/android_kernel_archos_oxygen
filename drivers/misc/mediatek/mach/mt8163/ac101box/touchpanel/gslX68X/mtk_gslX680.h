@@ -2,7 +2,7 @@
 
 
 
-#include "GSL3670_hxd_0786.h"
+#include "GSL3680_hxd_1076.h"
 
 
 //#include "mtk_gslX680_factory.h"
