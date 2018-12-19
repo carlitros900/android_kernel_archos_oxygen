@@ -459,7 +459,6 @@ void hdmi_internal_set_mode(unsigned char ucMode)
 
 int hdmi_internal_power_on(void)
 {
-
 	HDMI_DRV_FUNC();
 
 	if (hdmi_powerenable == 1) {
@@ -512,9 +511,7 @@ int hdmi_internal_power_on(void)
 	vWriteHdmiSYSMsk(HDMI_SYS_CFG20, HDMI_PCLK_FREE_RUN, HDMI_PCLK_FREE_RUN);
 	vWriteHdmiSYSMsk(HDMI_SYS_CFG20, HDMI_OUT_FIFO_EN, HDMI_OUT_FIFO_EN);
 	vWriteHdmiSYSMsk(HDMI_SYS_CFG1C, ANLG_ON | HDMI_SPIDIF_ON, ANLG_ON | HDMI_SPIDIF_ON);
-
 	vWriteHdmiSYSMsk(HDMI_SYS_CFG20, HDMI_SECURE_MODE, 0x1 << 15);
-
 
 	vInitHdcpKeyGetMethod(NON_HOST_ACCESS_FROM_EEPROM);
 
@@ -528,7 +525,6 @@ int hdmi_internal_power_on(void)
 	init_timer(&r_hdmi_timer);
 	add_timer(&r_hdmi_timer);
 
-
 	memset((void *)&r_cec_timer, 0, sizeof(r_cec_timer));
 	r_cec_timer.expires = jiffies + 1000 / (1000 / HZ);
 	r_cec_timer.function = cec_poll_isr;
@@ -538,38 +534,13 @@ int hdmi_internal_power_on(void)
 
 	atomic_set(&hdmi_irq_event, 1);
 	wake_up_interruptible(&hdmi_irq_wq);
-
 	return 0;
 }
-#if 0
-static int get_iddig_state(void)
-{
-
-        /* struct device_node *np = dev->dev.of_node; */
-        struct device_node *np;
-	unsigned int gpio38_iddig = 0;
-	int iddig_state = 0;
-        np = of_find_compatible_node(NULL, NULL, "mediatek,mt8163-usb20");
-        if (np == NULL) {
-                printk("USB OTG - get node failed\n");
-                return -ENODEV;
-        }
-
-        gpio38_iddig = of_get_named_gpio(np, "iddig_gpio", 0);
-        if (gpio38_iddig == 0) {
-                printk("iddig_gpio fail\n");
-        }
-
-	iddig_state = __gpio_get_value(gpio38_iddig);
-        return  iddig_state;
-}
-#endif
 
 /*----------------------------------------------------------------------------*/
 
 void hdmi_internal_power_off(void)
 {
-
 	HDMI_DRV_FUNC();
 
 	if (hdmi_powerenable == 0)
@@ -600,12 +571,8 @@ void hdmi_internal_power_off(void)
 
 	if (hdmi_power_control_pin > 0) {
 		pr_err("[hdmi]hdmi control pin number is %d\n", hdmi_power_control_pin);
-#if defined(CONFIG_HDMI_5V_NEED_POWER_OFF)
-		if (get_iddig_state()) {
-			gpio_direction_output(hdmi_power_control_pin, 0);
-			gpio_set_value(hdmi_power_control_pin, 0);
-		}
-#endif
+		gpio_direction_output(hdmi_power_control_pin, 0);
+		gpio_set_value(hdmi_power_control_pin, 0);
 	}
 
 	/* vWriteHdmiTOPCKMsk(INFRA_PDN0, CEC_PDN0, CEC_PDN0); */
@@ -1164,8 +1131,6 @@ void hdmi_irq_impl(void)
 		vPlugDetectService(HDMI_STATE_HOT_PLUG_IN_ONLY);
 		HDMI_PLUG_LOG("hdmi plug in only return\n");
 	}
-
-
 }
 
 static int hdmi_timer_kthread(void *data)
@@ -1407,6 +1372,7 @@ int hdmi_internal_probe(struct platform_device *pdev)
 	hdmi_cec_power_on(1);
 	vCec_pdn_32k();
 	vHotPlugPinInit(pdev);
+	vDdcPinInit(pdev);
 	/* hdmi_internal_power_on(); */
 	/* hdmi_internal_power_off(); */
 	/* vMoveHDCPInternalKey(INTERNAL_ENCRYPT_KEY); */

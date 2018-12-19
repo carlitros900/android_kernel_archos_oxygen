@@ -104,6 +104,154 @@
 static void musbfsh_ep_program(struct musbfsh *musbfsh, u8 epnum,
 			       struct urb *urb, int is_out, u8 *buf,
 			       u32 offset, u32 len);
+/*ENABLE_USB11_ISO_TRANSFER*/
+
+static bool musbfsh_allocate_ep_fifo(struct musbfsh	*musbfsh, struct musbfsh_qh	*qh)
+{
+	struct usb_host_endpoint *hep = qh->hep;
+	u16 ep_fifo_sz = (le16_to_cpu(hep->desc.wMaxPacketSize)&0x7ff) *
+					(1 + ((le16_to_cpu(hep->desc.wMaxPacketSize) >> 11) & 0x03));
+	u16 fifo_unit_nr = (ep_fifo_sz+511)/512;
+	u16 fifosz = 0;
+	u16 free_uint = 0;
+	u16 i;
+	u8 reversed;
+	u8 free;
+	u8 found = 0;
+	u16 fifoaddr;
+	u8 index;
+
+	INFO("max packet size 0x%x\n", le16_to_cpu(hep->desc.wMaxPacketSize));
+
+	reversed = 0;
+
+	for(i = 0; i < musbfsh->ep_fifo_total_sz; i++) {
+		if(reversed)
+			free = !(musbfsh->ep_fifo & (1 << (musbfsh->ep_fifo_total_sz - 1 - i)));
+		else
+			free = !(musbfsh->ep_fifo &  (1 << i));
+
+		if(free)
+			free_uint++;
+		else
+			free_uint = 0;
+
+		if(free_uint == fifo_unit_nr)
+		{
+			found =1;
+			break;
+		}
+
+	}
+
+	if(found == 0)
+	{
+		WARNING("[usb]fifo not enough!!!!!!!!!!!\n");
+		return false;
+	}
+
+	if(reversed)
+		fifoaddr = musbfsh->ep_fifo_total_sz-1-i;
+	else
+		fifoaddr = i-(fifo_unit_nr-1);
+
+	for(i=0; i< fifo_unit_nr; i++)
+	{
+		musbfsh->ep_fifo |= (1<<(fifoaddr+i));
+	}
+
+	if(ep_fifo_sz <= 512){
+		fifosz = 6;
+	}
+	else if(ep_fifo_sz <= 1024){
+		fifosz = 7;
+	}
+	else if(ep_fifo_sz <= 2048){
+		fifosz = 8;
+	}
+	else if(ep_fifo_sz <= 4096){
+		fifosz = 9;
+	}
+
+	index = musbfsh_readb(musbfsh->mregs, MUSBFSH_INDEX);
+	musbfsh_writeb(musbfsh->mregs, MUSBFSH_INDEX, qh->hw_ep->epnum);
+
+	INFO("[usb]assign hwep: %d, is_in:%d, fifoaddr: 0x%08x,fifosz: 0x%02x\n",qh->hw_ep->epnum,
+	qh->is_in, fifoaddr, fifosz);
+	INFO("[usb]ep fifo status: 0x%08x\n",musbfsh->ep_fifo);
+
+
+	if(qh->is_in)
+	{
+		musbfsh_write_rxfifosz(musbfsh->mregs, fifosz);
+		musbfsh_write_rxfifoadd(musbfsh->mregs, 0x08+0x40*fifoaddr);
+	}
+	else
+	{
+		musbfsh_write_txfifosz(musbfsh->mregs,fifosz);
+		musbfsh_write_txfifoadd(musbfsh->mregs,0x08+0x40*fifoaddr);
+	}
+	musbfsh_writeb(musbfsh->mregs, MUSBFSH_INDEX, index);
+
+	return true;
+}
+
+static bool musbfsh_release_ep_fifo(struct musbfsh *musbfsh, struct musbfsh_qh	*qh)
+{
+	struct usb_host_endpoint *hep = qh->hep;
+	u16 ep_fifo_sz = (le16_to_cpu(hep->desc.wMaxPacketSize)&0x7ff) *
+					(1 + ((le16_to_cpu(hep->desc.wMaxPacketSize) >> 11) & 0x03));
+	u16 fifo_unit_nr = (ep_fifo_sz+511)/512;
+	u16 i;
+	u16 fifoaddr;
+	u8 index;
+
+	index = musbfsh_readb(musbfsh->mregs, MUSBFSH_INDEX);
+	musbfsh_writeb(musbfsh->mregs, MUSBFSH_INDEX, qh->hw_ep->epnum);
+
+	if(qh->is_in)
+		fifoaddr =  musbfsh_read_rxfifoadd(musbfsh->mregs);
+	else
+		fifoaddr = musbfsh_read_txfifoadd(musbfsh->mregs);
+
+	fifoaddr =  (fifoaddr-0x08)/0x40;
+
+	for(i=0; i< fifo_unit_nr; i++)
+	{
+		musbfsh->ep_fifo &= ~(1<<(fifoaddr+i));
+	}
+
+	INFO("[usb]release ep: %d,in: %d,ep fifo status: 0x%08x\n",qh->hw_ep->epnum,qh->is_in,musbfsh->ep_fifo);
+
+	if(qh->is_in)
+	{
+		musbfsh_write_rxfifosz(musbfsh->mregs, 0);
+		musbfsh_write_rxfifoadd(musbfsh->mregs, 0);
+	}
+	else
+	{
+		musbfsh_write_txfifosz(musbfsh->mregs,0);
+		musbfsh_write_txfifoadd(musbfsh->mregs,0);
+	}
+
+	musbfsh_writeb(musbfsh->mregs, MUSBFSH_INDEX, index);
+	return true;
+}
+
+#if 0
+static uint32_t MGC_Log2(uint32_t x)
+{
+	uint32_t i;
+
+	for (i = 0; x > 1; i++)
+	{
+		x = x / 2;
+	}
+
+	return i;
+}
+#endif
+/*END ENABLE_USB11_ISO_TRANSFER*/
 
 /*
  * Clear TX fifo. Needed to avoid BABBLE errors.
@@ -212,6 +360,9 @@ static struct musbfsh_qh *musbfsh_ep_get_qh(struct musbfsh_hw_ep *ep, int is_in)
 static void musbfsh_start_urb(struct musbfsh *musbfsh, int is_in,
 			      struct musbfsh_qh *qh)
 {
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	u16			frame;
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	u32 len;
 	struct urb *urb = next_urb(qh);
 	void *buf = urb->transfer_buffer;
@@ -243,7 +394,15 @@ static void musbfsh_start_urb(struct musbfsh *musbfsh, int is_in,
 		musbfsh->ep0_stage = MUSBFSH_EP0_START;
 		buf = urb->setup_packet;	/* contain the request. */
 		len = 8;
+        break;
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	case USB_ENDPOINT_XFER_ISOC:
+		qh->iso_idx = 0;
+		qh->frame = 0;
+		offset = urb->iso_frame_desc[0].offset;
+		len = urb->iso_frame_desc[0].length;
 		break;
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	default:
 		/* bulk, interrupt */
 		/* actual_length may be nonzero on retry paths */
@@ -251,22 +410,17 @@ static void musbfsh_start_urb(struct musbfsh *musbfsh, int is_in,
 		buf = urb->transfer_buffer + urb->actual_length;
 		len = urb->transfer_buffer_length - urb->actual_length;
 	}
-	INFO("qh %p urb %p dev%d ep%d %s %s, hw_ep %d, %p/%d\n",
-		qh, urb, address, qh->epnum, is_in ? "in" : "out",
-		({ char *s;
-			switch (qh->type) {
-			case USB_ENDPOINT_XFER_CONTROL:
-				s = "-ctl";
-				break;
-			case USB_ENDPOINT_XFER_BULK:
-				s = "-bulk";
-				break;
-			default:
-				s = "-intr";
-				break;
-			};
-			s;
-		}),
+	INFO( "qh %p urb %p dev%d ep%d %s %s, hw_ep %d, %p/%d\n",
+			qh, urb, address, qh->epnum,
+			is_in ? "in" : "out",
+			({char *s; switch (qh->type) {
+			case USB_ENDPOINT_XFER_CONTROL:	s = "-ctl"; break;
+			case USB_ENDPOINT_XFER_BULK:	s = "-bulk"; break;
+			/*ENABLE_USB11_ISO_TRANSFER*/
+			case USB_ENDPOINT_XFER_ISOC:	s = "-iso"; break;
+			/*END ENABLE_USB11_ISO_TRANSFER*/
+			default:			s = "-intr"; break;
+			}; s; }),
 		epnum, buf + offset, len);
 	/* Configure endpoint */
 	musbfsh_ep_set_qh(hw_ep, is_in, qh);
@@ -282,14 +436,37 @@ static void musbfsh_start_urb(struct musbfsh *musbfsh, int is_in,
 	if (is_in)
 		return;
 
-	INFO("Start TX%d %s\n", epnum, hw_ep->tx_channel ? "dma" : "pio");
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	/* determine if the time is right for a periodic transfer */
+	switch (qh->type) {
+	case USB_ENDPOINT_XFER_ISOC:
+	case USB_ENDPOINT_XFER_INT:
+		frame = musbfsh_readw(hw_ep->regs, MUSBFSH_FRAME);
+		/* FIXME this doesn't implement that scheduling policy ...
+		* or handle framecounter wrapping
+		*/
+		if ((urb->transfer_flags & URB_ISO_ASAP)
+		|| (frame >= urb->start_frame)) {
+			/* REVISIT the SOF irq handler shouldn't duplicate
+			* this code; and we don't init urb->start_frame...
+			*/
+			qh->frame = 0;
+			goto start;
+		} else {
+			qh->frame = urb->start_frame;
+			/* enable SOF interrupt so we can count down */
+#if 1 /* ifndef	CONFIG_ARCH_DAVINCI */
+			musbfsh_writeb(hw_ep->regs, MUSBFSH_INTRUSBE, 0xff);
+#endif
+		}
+		break;
+	default:
+start:
 
-	/*
-	 * for pio mode, dma mode will send data after the configuration of
-	 * the dma channel
-	 */
 	if (!hw_ep->tx_channel)
-		musbfsh_h_tx_start(hw_ep);
+		musbfsh_h_tx_start(hw_ep); /*for pio mode, dma mode will send data after the configuration of the dma channel*/
+	}
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 }
 
 /* Context: caller owns controller lock, IRQs are blocked */
@@ -398,6 +575,12 @@ static void musbfsh_advance_schedule(struct musbfsh *musbfsh, struct urb *urb,
 		/* after the urb, should save the toggle for the ep! */
 		musbfsh_save_toggle(qh, is_in, urb);
 		break;
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	case USB_ENDPOINT_XFER_ISOC:
+		if (status == 0 && urb->error_count)
+			status = -EXDEV;
+		break;
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	}
 
 	qh->is_ready = 0;
@@ -434,7 +617,10 @@ static void musbfsh_advance_schedule(struct musbfsh *musbfsh, struct urb *urb,
 #endif
 		musbfsh_ep_set_qh(ep, is_in, NULL);
 		qh->hep->hcpriv = NULL;
-
+		/*ENABLE_USB11_ISO_TRANSFER*/
+		if(qh->type != USB_ENDPOINT_XFER_CONTROL)
+			musbfsh_release_ep_fifo(musbfsh, qh);
+		/*ENABLE_USB11_ISO_TRANSFER*/
 		switch (qh->type) {
 
 		case USB_ENDPOINT_XFER_CONTROL:
@@ -451,6 +637,9 @@ static void musbfsh_advance_schedule(struct musbfsh *musbfsh, struct urb *urb,
 				break;
 			}
 		case USB_ENDPOINT_XFER_INT:
+		/*ENABLE_USB11_ISO_TRANSFER*/
+		case USB_ENDPOINT_XFER_ISOC:
+		/*ENABLE_USB11_ISO_TRANSFER*/
 			/*
 			 * this is where periodic bandwidth should be
 			 * de-allocated if it's tracked and allocated;
@@ -491,8 +680,10 @@ static u16 musbfsh_h_flush_rxfifo(struct musbfsh_hw_ep *hw_ep, u16 csr)
 /*
  * PIO RX for a packet (or part of it).
  */
-static bool musbfsh_host_packet_rx(struct musbfsh *musbfsh, struct urb *urb,
-				   u8 epnum)	/* real ep */
+/*ENABLE_USB11_ISO_TRANSFER*/
+static bool
+musbfsh_host_packet_rx(struct musbfsh *musbfsh, struct urb *urb, u8 epnum, u8 iso_err)/*real ep*/
+/*END ENABLE_USB11_ISO_TRANSFER*/
 {
 	u16 rx_count;
 	u8 *buf;
@@ -503,6 +694,9 @@ static bool musbfsh_host_packet_rx(struct musbfsh *musbfsh, struct urb *urb,
 	struct musbfsh_hw_ep *hw_ep = musbfsh->endpoints + epnum;
 	void __iomem *epio = hw_ep->regs;
 	struct musbfsh_qh *qh = hw_ep->in_qh;
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	int			pipe = urb->pipe;
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	void *buffer = urb->transfer_buffer;
 
 	/* musbfsh_ep_select(mbase, epnum); */
@@ -511,6 +705,36 @@ static bool musbfsh_host_packet_rx(struct musbfsh *musbfsh, struct urb *urb,
 	     __func__, epnum, rx_count, urb->transfer_buffer, qh->offset,
 	     urb->transfer_buffer_length);
 	/* unload FIFO */
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	if (usb_pipeisoc(pipe)) {
+		int					status = 0;
+		struct usb_iso_packet_descriptor	*d;
+
+		if (iso_err) {
+			status = -EILSEQ;
+			urb->error_count++;
+		}
+
+		d = urb->iso_frame_desc + qh->iso_idx;
+		buf = buffer + d->offset;
+		length = d->length;
+		if (rx_count > length) {
+			if (status == 0) {
+				status = -EOVERFLOW;
+				urb->error_count++;
+			}
+			do_flush = 1;
+		} else
+			length = rx_count;
+		urb->actual_length += length;
+		d->actual_length = length;
+
+		d->status = status;
+
+		/* see if we are done */
+		done = (++qh->iso_idx >= urb->number_of_packets);
+	} else {
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	/* non-isoch */
 	buf = buffer + qh->offset;
 	length = urb->transfer_buffer_length - qh->offset;
@@ -532,7 +756,9 @@ static bool musbfsh_host_packet_rx(struct musbfsh *musbfsh, struct urb *urb,
 	    && (urb->transfer_flags & URB_SHORT_NOT_OK)
 	    && (urb->actual_length < urb->transfer_buffer_length))
 		urb->status = -EREMOTEIO;
-
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	}
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	musbfsh_read_fifo(hw_ep, length, buf);
 
 	csr = musbfsh_readw(epio, MUSBFSH_RXCSR);
@@ -1274,14 +1500,30 @@ void musbfsh_host_tx(struct musbfsh *musbfsh, u8 epnum)	/* real ep num */
 		}
 	}
 
-	if (!status || dma) {
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	if (!status || dma || usb_pipeisoc(pipe)) {
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 		if (dma)
 			length = dma->actual_len;
 		else
 			length = qh->segsize;
 		qh->offset += length;
+		/*ENABLE_USB11_ISO_TRANSFER*/
+		if (usb_pipeisoc(pipe)) {
+			struct usb_iso_packet_descriptor	*d;
 
-		if (dma && urb->transfer_buffer_length == qh->offset) {
+			d = urb->iso_frame_desc + qh->iso_idx;
+			d->actual_length = length;
+			d->status = status;
+			if (++qh->iso_idx >= urb->number_of_packets) {
+				done = true;
+			} else {
+				d++;
+				offset = d->offset;
+				length = d->length;
+			}
+		} else if (dma && urb->transfer_buffer_length == qh->offset) {
+		/*END ENABLE_USB11_ISO_TRANSFER*/
 			done = true;
 		} else {
 			/* see if we need to send more data, or ZLP */
@@ -1439,6 +1681,9 @@ void musbfsh_host_rx(struct musbfsh *musbfsh, u8 epnum)
 	void __iomem *mbase = musbfsh->mregs;
 	int pipe;
 	u16 rx_csr, val;
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	bool			iso_err = false;
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	bool done = false;
 	u32 status;
 	struct dma_channel *dma;
@@ -1486,27 +1731,32 @@ void musbfsh_host_rx(struct musbfsh *musbfsh, u8 epnum)
 		musbfsh_writeb(epio, MUSBFSH_RXINTERVAL, 0);
 
 	} else if (rx_csr & MUSBFSH_RXCSR_DATAERROR) {
-		INFO("RX end %d NAK timeout\n", epnum);
-		/* removed due to too many logs */
-
-		/* NOTE: NAKing is *NOT* an error, so we want to
-		 * continue.  Except ... if there's a request for
-		 * another QH, use that instead of starving it.
-		 *
-		 * Devices like Ethernet and serial adapters keep
-		 * reads posted at all times, which will starve
-		 * other devices without this logic.
-		 */
-		if (usb_pipebulk(urb->pipe)
-		    && qh->mux == 1 && !list_is_singular(&musbfsh->in_bulk)) {
-			musbfsh_bulk_rx_nak_timeout(musbfsh, hw_ep);
-			return;
+		INFO("RX end %d NAK timeout\n", epnum); // removed due to too many logs
+		/*ENABLE_USB11_ISO_TRANSFER*/
+		if (USB_ENDPOINT_XFER_ISOC != qh->type) {
+			/* NOTE: NAKing is *NOT* an error, so we want to
+			* continue.  Except ... if there's a request for
+			* another QH, use that instead of starving it.
+			*
+			* Devices like Ethernet and serial adapters keep
+			* reads posted at all times, which will starve
+			* other devices without this logic.
+			*/
+			if (usb_pipebulk(urb->pipe)
+			&& qh->mux == 1 && !list_is_singular(&musbfsh->in_bulk)) {
+				musbfsh_bulk_rx_nak_timeout(musbfsh, hw_ep);
+				return;
+			}
+			musbfsh_ep_select(mbase, epnum);
+			rx_csr |= MUSBFSH_RXCSR_H_WZC_BITS;
+			rx_csr &= ~MUSBFSH_RXCSR_DATAERROR;
+			musbfsh_writew(epio, MUSBFSH_RXCSR, rx_csr);
+			goto finish;
+		} else {
+			/* packet error reported later */
+			iso_err = true;
 		}
-		musbfsh_ep_select(mbase, epnum);
-		rx_csr |= MUSBFSH_RXCSR_H_WZC_BITS;
-		rx_csr &= ~MUSBFSH_RXCSR_DATAERROR;
-		musbfsh_writew(epio, MUSBFSH_RXCSR, rx_csr);
-		goto finish;
+		/*END ENABLE_USB11_ISO_TRANSFER*/
 	} else if (rx_csr & MUSBFSH_RXCSR_INCOMPRX) {
 		WARNING("end %d high bandwidth incomplete ISO packet RX\n",
 			epnum);
@@ -1557,14 +1807,31 @@ void musbfsh_host_rx(struct musbfsh *musbfsh, u8 epnum)
 			MUSBFSH_RXCSR_AUTOCLEAR |
 			MUSBFSH_RXCSR_RXPKTRDY);
 		musbfsh_writew(hw_ep->regs, MUSBFSH_RXCSR, val);
+		/*ENABLE_USB11_ISO_TRANSFER*/
+		if (usb_pipeisoc(pipe)) {
+			struct usb_iso_packet_descriptor *d;
 
+			d = urb->iso_frame_desc + qh->iso_idx;
+			d->actual_length = xfer_len;
 
-		/* done if urb buffer is full or short packet is recd */
-		done = (urb->actual_length + xfer_len >=
+			/* even if there was an error, we did the dma
+			* for iso_frame_desc->length
+			*/
+			if (d->status != -EILSEQ && d->status != -EOVERFLOW)
+				d->status = 0;
+
+			if (++qh->iso_idx >= urb->number_of_packets)
+				done = true;
+			else
+				done = false;
+
+		} else  {
+			/* done if urb buffer is full or short packet is recd */
+			done = (urb->actual_length + xfer_len >=
 			urb->transfer_buffer_length ||
 			dma->actual_len < qh->maxpacket);
-
-
+		}
+		/*END ENABLE_USB11_ISO_TRANSFER*/
 		/* send IN token for next packet, without AUTOREQ */
 		if (!done) {
 			val |= MUSBFSH_RXCSR_H_REQPKT;
@@ -1608,9 +1875,34 @@ void musbfsh_host_rx(struct musbfsh *musbfsh, u8 epnum)
 			     urb->transfer_buffer_length);
 
 			c = musbfsh->dma_controller;
+			/*ENABLE_USB11_ISO_TRANSFER*/
+			if (usb_pipeisoc(pipe)) {
+				int d_status = 0;
+				struct usb_iso_packet_descriptor *d;
 
+				d = urb->iso_frame_desc + qh->iso_idx;
+
+				if (iso_err) {
+					d_status = -EILSEQ;
+					urb->error_count++;
+				}
+				if (rx_count > d->length) {
+					if (d_status == 0) {
+					d_status = -EOVERFLOW;
+					urb->error_count++;
+					}
+
+					length = d->length;
+				} else
+					length = rx_count;
+				d->status = d_status;
+				buf = urb->transfer_dma + d->offset;
+			} else {
 			length = rx_count;
-			buf = urb->transfer_dma + urb->actual_length;
+			buf = urb->transfer_dma +
+			urb->actual_length;
+			}
+			/*END ENABLE_USB11_ISO_TRANSFER*/
 			dma->desired_mode = 0;
 
 #ifdef USE_MODE1
@@ -1691,7 +1983,9 @@ void musbfsh_host_rx(struct musbfsh *musbfsh, u8 epnum)
 		if (!dma) {
 			/* Unmap the buffer so that CPU can use it */
 			usb_hcd_unmap_urb_for_dma(musbfsh_to_hcd(musbfsh), urb);
-			done = musbfsh_host_packet_rx(musbfsh, urb, epnum);
+			/*ENABLE_USB11_ISO_TRANSFER*/
+			done = musbfsh_host_packet_rx(musbfsh, urb, epnum, iso_err);
+			/*END ENABLE_USB11_ISO_TRANSFER*/
 			INFO("read %spacket\n", done ? "last " : "");
 		}
 	}
@@ -1743,14 +2037,19 @@ static int musbfsh_schedule(struct musbfsh *musbfsh, struct musbfsh_qh *qh,
 
 	for (epnum = 1, hw_ep = musbfsh->endpoints + 1;
 	     epnum < musbfsh->nr_endpoints; epnum++, hw_ep++) {
-		int diff;
+		/*int diff;*/
 
 		if (musbfsh_ep_get_qh(hw_ep, is_in) != NULL)
 			continue;
 
-		if (hw_ep == musbfsh->bulk_ep)
-			continue;
+		/* if (hw_ep == musb->bulk_ep) */
+		/* continue; */
 
+		hw_ep = musbfsh->endpoints + epnum;	/* got the right ep */
+		INFO("musbfsh_schedule:: find a hw_ep%d\n", hw_ep->epnum);
+		break;
+
+#if 0
 		if (is_in)
 			diff = hw_ep->max_packet_sz_rx;
 		else
@@ -1763,7 +2062,15 @@ static int musbfsh_schedule(struct musbfsh *musbfsh, struct musbfsh_qh *qh,
 			best_diff = diff;
 			best_end = epnum;
 		}
+#endif
 	}
+
+	 if (!hw_ep) {
+		 INFO("musb::error!not find a ep for the urb\r\n");
+		 return -1;
+	 }
+
+#if 0
 	/* use bulk reserved ep1 if no other ep is free */
 	if (best_end < 0 && qh->type == USB_ENDPOINT_XFER_BULK) {
 		hw_ep = musbfsh->bulk_ep;
@@ -1786,10 +2093,11 @@ static int musbfsh_schedule(struct musbfsh *musbfsh, struct musbfsh_qh *qh,
 	} else if (best_end < 0) {
 		return -ENOSPC;
 	}
+#endif
 
 	idle = 1;
 	qh->mux = 0;
-	hw_ep = musbfsh->endpoints + best_end;
+	/*hw_ep = musbfsh->endpoints + best_end;*/
 	INFO("qh %p periodic slot %d\n", qh, best_end);
 success:
 	if (head) {
@@ -1803,7 +2111,10 @@ success:
 	qh->hw_ep = hw_ep;
 	qh->hep->hcpriv = qh;
 
-	/* the new urb added is the first urb now, excute it! */
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	if(qh->type != USB_ENDPOINT_XFER_CONTROL)
+		musbfsh_allocate_ep_fifo(musbfsh, qh);
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	if (idle) {
 #ifdef CONFIG_MTK_DT_USB_SUPPORT
 		mark_qh_activity(qh->epnum, hw_ep->epnum, is_in, 0);
@@ -1832,12 +2143,6 @@ static int musbfsh_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 	 * urb, urb->transfer_buffer_length, urb->actual_length,
 	 * epd->bEndpointAddress);
 	 */
-	   /* host role must be active */
-	if (!musbfsh->is_active)
-                {
-                    printk("[deubg]no dev");
-                                return -ENODEV;             
-                }
 #if 1
 	/*
 	 * workaround for DMA issue,
@@ -1892,7 +2197,9 @@ static int musbfsh_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 
 	qh->epnum = usb_endpoint_num(epd);
 	INFO("desc epnum=%d\r\n", qh->epnum);
-
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	qh->is_in = usb_pipein(urb->pipe);
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	/* NOTE: urb->dev->devnum is wrong during SET_ADDRESS */
 	qh->addr_reg = (u8) usb_pipedevice(urb->pipe);
 	INFO("desc pipe=0x%x, desc devnum=%d\r\n", urb->pipe, urb->dev->devnum);
@@ -1922,6 +2229,12 @@ static int musbfsh_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 			interval = max_t(u8, epd->bInterval, 1);
 			break;
 		}
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	case USB_ENDPOINT_XFER_ISOC:
+		/* ISO always uses logarithmic encoding */
+		interval = min_t(u8, epd->bInterval, 16);
+		break;
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	default:
 		/* REVISIT we actually want to use NAK limits, hinting to the
 		 * transfer scheduling logic to try some other qh, e.g. try
@@ -2108,6 +2421,10 @@ static int musbfsh_urb_dequeue(struct usb_hcd *hcd, struct urb *urb, int status)
 		 */
 		if (ready && list_empty(&qh->hep->urb_list)) {
 			qh->hep->hcpriv = NULL;
+		/*ENABLE_USB11_ISO_TRANSFER*/
+		if(qh->type != USB_ENDPOINT_XFER_CONTROL)
+			musbfsh_release_ep_fifo(musbfsh, qh);
+		/*ENABLE_USB11_ISO_TRANSFER*/
 			list_del(&qh->ring);
 			kfree(qh);
 		}
@@ -2185,7 +2502,10 @@ static void musbfsh_h_disable(struct usb_hcd *hcd,
 		 */
 		while (!list_empty(&hep->urb_list))
 			musbfsh_giveback(musbfsh, next_urb(qh), -ESHUTDOWN);
-
+		/*ENABLE_USB11_ISO_TRANSFER*/
+		if(qh->type != USB_ENDPOINT_XFER_CONTROL)
+			musbfsh_release_ep_fifo(musbfsh, qh);
+		/*ENABLE_USB11_ISO_TRANSFER*/
 		hep->hcpriv = NULL;
 		list_del(&qh->ring);
 		kfree(qh);
@@ -2193,26 +2513,6 @@ static void musbfsh_h_disable(struct usb_hcd *hcd,
 exit:
 	spin_unlock_irqrestore(&musbfsh->lock, flags);
 }
-
-void musbfsh_h_pre_disable(struct musbfsh *musbfsh)
-{
-	int i=0;
-	struct musbfsh_hw_ep *hw_ep = NULL;
-	struct usb_hcd *hcd = musbfsh_to_hcd(musbfsh);
-
-	printk("disable all endpoints\n");
-	if(hcd == NULL)
-		return;
-	for(i=0; i<musbfsh->nr_endpoints; i++) {
-		hw_ep = musbfsh->endpoints+i;
-		if(hw_ep->in_qh != NULL && hw_ep->in_qh->hep != NULL) {
-			musbfsh_h_disable(hcd, hw_ep->in_qh->hep);
-		} else if(hw_ep->out_qh != NULL && hw_ep->out_qh->hep != NULL) {
-			musbfsh_h_disable(hcd, hw_ep->out_qh->hep);
-		}
-	}
-}
-
 
 static int musbfsh_h_get_frame_number(struct usb_hcd *hcd)
 {

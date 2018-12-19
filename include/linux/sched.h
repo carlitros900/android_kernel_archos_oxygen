@@ -733,6 +733,16 @@ struct signal_struct {
 
 #define SIGNAL_UNKILLABLE	0x00000040 /* for init: ignore fatal signals */
 
+#define SIGNAL_STOP_MASK (SIGNAL_CLD_MASK | SIGNAL_STOP_STOPPED | \
+			  SIGNAL_STOP_CONTINUED)
+
+static inline void signal_set_stop_flags(struct signal_struct *sig,
+					 unsigned int flags)
+{
+	WARN_ON(sig->flags & (SIGNAL_GROUP_EXIT|SIGNAL_GROUP_COREDUMP));
+	sig->flags = (sig->flags & ~SIGNAL_STOP_MASK) | flags;
+}
+
 /* If true, all threads except ->group_exit_task have pending SIGKILL */
 static inline int signal_group_exit(const struct signal_struct *sig)
 {
@@ -762,6 +772,8 @@ struct user_struct {
 	unsigned long mq_bytes;	/* How many bytes can be allocated to mqueue? */
 #endif
 	unsigned long locked_shm; /* How many pages of mlocked shm ? */
+	unsigned long unix_inflight;	/* How many files in flight in unix sockets */
+	atomic_long_t pipe_bufs;  /* how many pages are allocated in pipe buffers */
 
 #ifdef CONFIG_KEYS
 	struct key *uid_keyring;	/* UID specific keyring */
@@ -1423,7 +1435,7 @@ struct task_struct {
 	unsigned brk_randomized:1;
 #endif
 	/* per-thread vma caching */
-	u32 vmacache_seqnum;
+	u64 vmacache_seqnum;
 	struct vm_area_struct *vmacache[VMACACHE_SIZE];
 #if defined(SPLIT_RSS_COUNTING)
 	struct task_rss_stat	rss_stat;
@@ -1901,31 +1913,8 @@ static inline pid_t task_tgid_nr(struct task_struct *tsk)
 	return tsk->tgid;
 }
 
-pid_t task_tgid_nr_ns(struct task_struct *tsk, struct pid_namespace *ns);
-
-static inline pid_t task_tgid_vnr(struct task_struct *tsk)
-{
-	return pid_vnr(task_tgid(tsk));
-}
-
 
 static inline int pid_alive(const struct task_struct *p);
-static inline pid_t task_ppid_nr_ns(const struct task_struct *tsk, struct pid_namespace *ns)
-{
-	pid_t pid = 0;
-
-	rcu_read_lock();
-	if (pid_alive(tsk))
-		pid = task_tgid_nr_ns(rcu_dereference(tsk->real_parent), ns);
-	rcu_read_unlock();
-
-	return pid;
-}
-
-static inline pid_t task_ppid_nr(const struct task_struct *tsk)
-{
-	return task_ppid_nr_ns(tsk, &init_pid_ns);
-}
 
 static inline pid_t task_pgrp_nr_ns(struct task_struct *tsk,
 					struct pid_namespace *ns)
@@ -1948,6 +1937,33 @@ static inline pid_t task_session_nr_ns(struct task_struct *tsk,
 static inline pid_t task_session_vnr(struct task_struct *tsk)
 {
 	return __task_pid_nr_ns(tsk, PIDTYPE_SID, NULL);
+}
+
+static inline pid_t task_tgid_nr_ns(struct task_struct *tsk, struct pid_namespace *ns)
+{
+	return __task_pid_nr_ns(tsk, __PIDTYPE_TGID, ns);
+}
+
+static inline pid_t task_tgid_vnr(struct task_struct *tsk)
+{
+	return __task_pid_nr_ns(tsk, __PIDTYPE_TGID, NULL);
+}
+
+static inline pid_t task_ppid_nr_ns(const struct task_struct *tsk, struct pid_namespace *ns)
+{
+	pid_t pid = 0;
+
+	rcu_read_lock();
+	if (pid_alive(tsk))
+		pid = task_tgid_nr_ns(rcu_dereference(tsk->real_parent), ns);
+	rcu_read_unlock();
+
+	return pid;
+}
+
+static inline pid_t task_ppid_nr(const struct task_struct *tsk)
+{
+	return task_ppid_nr_ns(tsk, &init_pid_ns);
 }
 
 /* obsolete, do not use */
@@ -2589,7 +2605,12 @@ static inline void set_task_comm(struct task_struct *tsk, const char *from)
 {
 	__set_task_comm(tsk, from, false);
 }
-extern char *get_task_comm(char *to, struct task_struct *tsk);
+
+extern char *__get_task_comm(char *to, size_t len, struct task_struct *tsk);
+#define get_task_comm(buf, tsk) ({			\
+	BUILD_BUG_ON(sizeof(buf) != TASK_COMM_LEN);	\
+	__get_task_comm(buf, sizeof(buf), tsk);		\
+})
 
 #ifdef CONFIG_SMP
 void scheduler_ipi(void);

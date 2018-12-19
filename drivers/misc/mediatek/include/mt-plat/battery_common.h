@@ -8,7 +8,7 @@
  *  BATTERY VOLTAGE
  ****************************************************************************/
 #define PRE_CHARGE_VOLTAGE                  (3200)
-#define SYSTEM_OFF_VOLTAGE                  (3470)
+#define SYSTEM_OFF_VOLTAGE                  (3400)
 #define CONSTANT_CURRENT_CHARGE_VOLTAGE     (4100)
 #define CONSTANT_VOLTAGE_CHARGE_VOLTAGE     (4200)
 #define CV_DROPDOWN_VOLTAGE                 (4000)
@@ -30,11 +30,7 @@
 #define MAX_PreCC_CHARGING_TIME		(1*30*60)/* 0.5hr */
 
 /* #define MAX_CV_CHARGING_TIME                  1*30*60         // 0.5hr */
-#if defined(CONFIG_MTK_DC_DET_VIA_GPIO) || defined(CONFIG_MTK_DC_DET_VIA_ADC)
-#define MAX_CV_CHARGING_TIME			(3*60*60*10)/* 3hr */
-#else
-#define MAX_CV_CHARGING_TIME			(6*60*60)/* 3hr */
-#endif
+#define MAX_CV_CHARGING_TIME			(3*60*60)/* 3hr */
 
 
 #define MUTEX_TIMEOUT                       (5000)
@@ -234,10 +230,13 @@ struct battery_custom_data {
 	int usb_charger_current_suspend;
 	int usb_charger_current_unconfigured;
 	int usb_charger_current_configured;
+	int usb_charger_charger_current;/*start-160325-xmyyq-add some charger type charger current node*/
 	int usb_charger_current;
 	int ac_charger_input_current;
 	int ac_charger_current;
+	int non_std_ac_charger_charger_current;/*start-160325-xmyyq-add some charger type charger current node*/
 	int non_std_ac_charger_current;
+	int charging_host_charger_charger_current;/*start-160325-xmyyq-add some charger type charger current node*/
 	int charging_host_charger_current;
 	int apple_0_5a_charger_current;
 	int apple_1_0a_charger_current;
@@ -259,6 +258,7 @@ struct battery_custom_data {
 	int npercent_tracking_time;
 	int sync_to_real_tracking_time;
 	int v_0percent_tracking;
+	int system_off_voltage;/*start-160325-xmyyq-add system_off_voltage in battery_custom_data*/
 
 	/* Battery Notify
 	   int battery_notify_case_0001_vcharger;
@@ -336,9 +336,11 @@ extern void do_chrdet_int_task(void);
 extern void set_usb_current_unlimited(bool enable);
 extern bool get_usb_current_unlimited(void);
 extern CHARGER_TYPE mt_get_charger_type(void);
+#if defined(CONFIG_MTK_USBFSH)
 #if defined(CONFIG_USB_MTK_CHARGER_DETECT)
 extern CHARGER_TYPE usb_charger_type_detect(void);
 extern bool mt_get_usb11_port_status(void);
+#endif
 #endif
 
 #if defined(CONFIG_MTK_HAFG_20)

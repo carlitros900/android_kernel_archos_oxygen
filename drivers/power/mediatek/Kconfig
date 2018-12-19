@@ -66,6 +66,11 @@ config MTK_BQ24296_SUPPORT
           and config MTK_SWCHR_SUPPORT
           Set to Yes if BQ24296 is used.
 	default n
+	
+config MTK_BQ27520_SUPPORT
+	bool "MTK_BQ27520_SUPPORT"
+	help
+	      yes : support TI bq27520 external gauge IC
 
 config MTK_NCP1854_SUPPORT
 	bool "MTK_NCP1854_SUPPORT"
@@ -239,7 +244,7 @@ config STOP_CHARGING_IN_TAKLING
 	  This is to provide better user experience
 	  and safety option.
 
-config DIS_CHECK_BATTERY
+config CONFIG_DIS_CHECK_BATTERY
 	bool "No shutdown if battery is not detected"
 	default n
 	help
@@ -302,3 +307,21 @@ config MTK_BIF_SUPPORT
 	  smart battery.
 	  Set No to disable BIF feature of a
 	  smart battery.
+
+config BATTERY_CHARGER_CE
+	bool "Disable charger when charge full to pass CE"
+	help
+	  Disable charger when charge full to pass CE
+config DYNAMIC_CHARGE_CURRENT_BY_TEMP
+	bool "DYNAMIC_CHARGE_CURRENT_BY_TEMP"
+	help
+	   yes : support KPOC feature, power off charging would running by
+	   kernel and charging animation by kpoc service. no: not support KPOC
+	   feature.
+	   device won't enter charging mode if config is no.
+	default n
+
+config MALATA_HARDWARE_VERSION
+	bool "support modem version check function"
+	default n
+	

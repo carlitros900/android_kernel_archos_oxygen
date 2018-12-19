@@ -150,6 +150,9 @@ static void update_fastmap_work_fn(struct work_struct *wrk)
 	struct ubi_device *ubi = container_of(wrk, struct ubi_device, fm_work);
 
 	ubi_update_fastmap(ubi);
+	spin_lock(&ubi->wl_lock);
+	ubi->fm_work_scheduled = 0;
+	spin_unlock(&ubi->wl_lock);
 }
 
 /**
@@ -658,7 +661,10 @@ static struct ubi_wl_entry *get_peb_for_wl(struct ubi_device *ubi)
 		/* We cannot update the fastmap here because this
 		 * function is called in atomic context.
 		 * Let's fail here and refill/update it as soon as possible. */
-		schedule_work(&ubi->fm_work);
+		if (!ubi->fm_work_scheduled) {
+			ubi->fm_work_scheduled = 1;
+			schedule_work(&ubi->fm_work);
+		}
 		return NULL;
 	}
 	pnum = pool->pebs[pool->used++];
@@ -2741,6 +2747,7 @@ int ubi_wl_init(struct ubi_device *ubi, struct ubi_attach_info *ai)
 #ifdef CONFIG_MTK_SLC_BUFFER_SUPPORT
 	ubi->tlc_free_count = 0;
 #endif
+	ubi->free_count = 0;
 
 	list_for_each_entry_safe(aeb, tmp, &ai->erase, u.list) {
 		cond_resched();
@@ -2773,7 +2780,6 @@ int ubi_wl_init(struct ubi_device *ubi, struct ubi_attach_info *ai)
 		found_pebs++;
 	}
 
-	ubi->free_count = 0;
 	list_for_each_entry(aeb, &ai->free, u.list) {
 		cond_resched();
 
@@ -2857,6 +2863,7 @@ int ubi_wl_init(struct ubi_device *ubi, struct ubi_attach_info *ai)
 		if (ubi->corr_peb_count)
 			ubi_err("%d PEBs are corrupted and not used",
 				ubi->corr_peb_count);
+		err = -ENOSPC;
 		goto out_free;
 	}
 	ubi->avail_pebs -= reserved_pebs;

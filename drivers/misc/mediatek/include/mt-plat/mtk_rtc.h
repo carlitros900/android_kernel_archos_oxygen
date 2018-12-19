@@ -33,7 +33,6 @@ extern void rtc_disable_abb_32k(void);
 extern void rtc_enable_writeif(void);
 extern void rtc_disable_writeif(void);
 
-extern void rtc_clear_hard_reset(void);
 extern void rtc_mark_recovery(void);
 #if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)
 extern void rtc_mark_kpoc(void);

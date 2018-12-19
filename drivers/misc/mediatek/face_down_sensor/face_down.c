@@ -4,8 +4,10 @@ static struct fdn_context *fdn_context_obj;
 
 static struct fdn_init_info *face_down_init = { 0 };	/* modified */
 
+#if 0
 static void fdn_early_suspend(struct early_suspend *h);
 static void fdn_late_resume(struct early_suspend *h);
+#endif
 
 static int resume_enable_status;
 
@@ -28,15 +30,26 @@ static struct fdn_context *fdn_context_alloc_object(void)
 int fdn_notify(void)
 {
 	int err = 0;
-	int value = 0;
+	u16 value = 0;
+	int status = 0;
 	struct fdn_context *cxt = NULL;
 
 	cxt = fdn_context_obj;
 	FDN_LOG("fdn_notify++++\n");
+	cxt->fdn_data.get_data(&value, &status);
+	FDN_LOG("value = %d \n",value);
 
-	value = 1;
-	input_report_rel(cxt->idev, EVENT_TYPE_FDN_VALUE, value);
-	input_sync(cxt->idev);
+	//value = 1;
+	if(value == 1) {
+		input_report_rel(cxt->idev, EVENT_TYPE_FDN_VALUE, value);
+		input_sync(cxt->idev);
+		input_report_rel(cxt->idev, EVENT_TYPE_FLIP_VALUE, value);
+		input_sync(cxt->idev);
+	}
+	if(value == 2) {
+		input_report_rel(cxt->idev, EVENT_TYPE_FLIP_VALUE, value);
+		input_sync(cxt->idev);
+	}
 
 	return err;
 }
@@ -182,7 +195,8 @@ static ssize_t fdn_show_active(struct device *dev, struct device_attribute *attr
 	return snprintf(buf, PAGE_SIZE, "%d\n", cxt->is_active_data);
 }
 
-static ssize_t fdn_store_delay(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t fdn_store_delay(struct device *dev, struct device_attribute *attr, 
+                    const char *buf ,size_t count)
 {
 	int len = 0;
 
@@ -236,7 +250,7 @@ static ssize_t fdn_show_flush(struct device *dev, struct device_attribute *attr,
 
 static ssize_t fdn_show_devnum(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	char *devname = NULL;
+	const char *devname = NULL;
 
 	devname = dev_name(&fdn_context_obj->idev->dev);
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);	/* TODO: why +5? */
@@ -313,7 +327,7 @@ static int fdn_misc_init(struct fdn_context *cxt)
 	int err = 0;
 	/* kernel-3.10\include\linux\Miscdevice.h */
 	/* use MISC_DYNAMIC_MINOR exceed 64 */
-	cxt->mdev.minor = M_FDN_MISC_MINOR;
+	cxt->mdev.minor = MISC_DYNAMIC_MINOR;
 	cxt->mdev.name = FDN_MISC_DEV_NAME;
 
 	err = misc_register(&cxt->mdev);
@@ -342,6 +356,7 @@ static int fdn_input_init(struct fdn_context *cxt)
 
 	dev->name = FDN_INPUTDEV_NAME;
 	input_set_capability(dev, EV_REL, EVENT_TYPE_FDN_VALUE);
+	input_set_capability(dev, EV_REL, EVENT_TYPE_FLIP_VALUE);
 
 	input_set_drvdata(dev, cxt);
 	set_bit(EV_REL, dev->evbit);
@@ -483,6 +498,7 @@ static int fdn_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#if 0
 static void fdn_early_suspend(struct early_suspend *h)
 {
 	atomic_set(&(fdn_context_obj->early_suspend), 1);
@@ -503,6 +519,7 @@ static void fdn_late_resume(struct early_suspend *h)
 	FDN_LOG(" fdn_late_resume ok------->hwm_obj->early_suspend=%d\n",
 		atomic_read(&(fdn_context_obj->early_suspend)));
 }
+#endif
 
 #if !defined(CONFIG_HAS_EARLYSUSPEND) || !defined(USE_EARLY_SUSPEND)
 static int fdn_suspend(struct platform_device *dev, pm_message_t state)

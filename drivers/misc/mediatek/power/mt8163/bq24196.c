@@ -4,10 +4,12 @@
 #include <linux/platform_device.h>
 #include <linux/i2c.h>
 #include <linux/slab.h>
+#include <linux/gpio.h>/*start-160325-xmyyq-add bq24196 chg_ce_gpio*/
 #ifdef CONFIG_OF
 #include <linux/of.h>
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
+#include <linux/of_gpio.h>/*start-160325-xmyyq-add bq24196 chg_ce_gpio*/
 #endif
 #include <mt-plat/charging.h>
 #include "bq24196.h"
@@ -519,6 +521,27 @@ void bq24196_dump_register(void)
 	battery_log(BAT_LOG_FULL, "\n");
 }
 
+/*start-160325-xmyyq-add bq24196 chg_ce_gpio*/
+void bq24196_chg_ce(void)
+{
+	static struct device_node *node;
+	static unsigned int GPIO_CHG_CE;
+
+	node = of_find_compatible_node(NULL, NULL, "ti,bq24196");
+	if (!node) {
+		battery_log(BAT_LOG_CRTI, "Failed to find device-tree node: ti,bq24196\n");
+		return;
+	}
+
+	GPIO_CHG_CE = of_get_named_gpio(node, "chg-ce-gpio", 0);
+	if (gpio_is_valid(GPIO_CHG_CE)) {
+		gpio_direction_output(GPIO_CHG_CE, 0);
+		gpio_set_value(GPIO_CHG_CE, 0);
+	}else
+		pr_err("can not get valid gpio analogix, bq24196 chg-ce-gpio\n");
+}
+/*end-160325-xmyyq-add bq24196 chg_ce_gpio*/
+
 static int bq24196_driver_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 
@@ -526,6 +549,9 @@ static int bq24196_driver_probe(struct i2c_client *client, const struct i2c_devi
 
 	new_client = client;
 
+	/*start-160325-xmyyq-add bq24196 chg_ce_gpio*/
+	bq24196_chg_ce();
+	/*end-160325-xmyyq-add bq24196 chg_ce_gpio*/
 	/* --------------------- */
 	/*bq24196_hw_component_detect();*/
 	bq24196_dump_register();

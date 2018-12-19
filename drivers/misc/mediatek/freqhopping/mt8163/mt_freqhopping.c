@@ -751,7 +751,7 @@ static int mt_fh_hal_dfs_vencpll(unsigned int target_freq)
 
 		wait_dds_stable(pll_dds, g_reg_mon[pll_id], 100);
 	}
-#if 0//!defined(CONFIG_MTK_OV8858_LEAD_TO_NULL_POINTER)//0//add by tubao
+	#if 0
 	switch (target_freq) {
 	#if 0
 	case VENCPLL_TARGETVCO_1:

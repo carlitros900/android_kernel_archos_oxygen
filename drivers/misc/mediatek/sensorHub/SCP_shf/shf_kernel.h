@@ -2,6 +2,7 @@
 #define SHF_KERNEL_H
 
 #include <linux/types.h>
+#include <hwmsensor.h>
 
 /* IPI received data cache */
 #define SHF_IPI_PROTOCOL_BYTES (48)
@@ -26,8 +27,8 @@ struct ipi_buffer_t {
 #define SHF_IPI_POLL            SHF_IOR(2, struct ipi_data_t)
 #define SHF_GESTURE_ENABLE      SHF_IOW(3, int)
 
-/* #ifdef CONFIG_MTK_SENSOR_HUB_SUPPORT */
-/* extern void tpd_scp_wakeup_enable(bool enable); */
-/* #endif */
+#ifdef CONFIG_TOUCHSCREEN_MTK_FT5X0X
+extern void tpd_scp_wakeup_enable(bool enable);
+#endif
 
 #endif				/* SHF_KERNEL_H */

@@ -266,16 +266,8 @@ TZ_RESULT KREE_TeeServiceCallNoCheck(KREE_SESSION_HANDLE handle,
 					uint32_t command, uint32_t paramTypes,
 					MTEEC_PARAM param[4])
 {
-	TZ_RESULT res;
-	struct timespec s, e;
-
-	getnstimeofday(&s);
-	res = (TZ_RESULT) tz_service_call(handle, command, paramTypes,
+	return  (TZ_RESULT) tz_service_call(handle, command, paramTypes,
 						(unsigned long) param);
-	getnstimeofday(&e);
-
-	pr_warn("elapsed time:%lx\n", e.tv_nsec - s.tv_nsec);
-	return res;
 }
 #endif /* CONFIG_TRUSTY */
 #else

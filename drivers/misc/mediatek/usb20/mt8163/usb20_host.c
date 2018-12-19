@@ -42,7 +42,7 @@
 #ifdef CONFIG_USB_MTK_OTG
 
 #ifdef CONFIG_OF
- unsigned int iddig_pin;
+static unsigned int iddig_pin;
 static unsigned int iddig_pin_mode;
 static unsigned int iddig_if_config = 1;
 #if !defined(OTG_BOOST_BY_SWITCH_CHARGER)
@@ -59,7 +59,7 @@ struct pinctrl_state *pinctrl_drvvbus;
 struct pinctrl_state *pinctrl_drvvbus_low;
 struct pinctrl_state *pinctrl_drvvbus_high;
 #endif
- int usb_iddig_number;
+static int usb_iddig_number;
 
 static struct musb_fifo_cfg fifo_cfg_host[] = {
 { .hw_ep_num =  1, .style = MUSB_FIFO_TX,   .maxpacket = 512, .mode = MUSB_BUF_SINGLE},
@@ -87,6 +87,7 @@ module_param(delay_time1, int, 0644);
 
 void mt_usb_set_vbus(struct musb *musb, int is_on)
 {
+	
 	DBG(0, "mt65xx_usb20_vbus++,is_on=%d\r\n", is_on);
 #ifndef FPGA_PLATFORM
 	if (is_on) {
@@ -348,11 +349,7 @@ static void musb_id_pin_work(struct work_struct *data)
 	if (mtk_musb->is_host) {
 		/*setup fifo for host mode*/
 		ep_config_from_table_for_host(mtk_musb);
-		
-#ifndef CONFIG_MTK_USB_HOST_KEEP_WAKEUPLOCK
-#else
 		wake_lock(&mtk_musb->usb_lock);
-#endif
 		musb_platform_set_vbus(mtk_musb, 1);
 
 		/* for no VBUS sensing IP*/

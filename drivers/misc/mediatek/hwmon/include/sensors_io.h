@@ -147,12 +147,7 @@ struct SENSOR_DATA {
 #define ECOMPASS_IOC_GET_MFLAG			_IOR(MSENSOR, 0x1e, short)
 #define	ECOMPASS_IOC_GET_OFLAG			_IOR(MSENSOR, 0x1f, short)
 #define ECOMPASS_IOC_GET_OPEN_STATUS	_IOR(MSENSOR, 0x20, int)
-//add by alex for software gyroscope
-#ifdef CONFIG_SOFTWARE_MMC_GYROSCOPE
-#define ECOMPASS_IOC_SET_YPR			_IOW(MSENSOR, 0x21, int[28])
-#else
 #define ECOMPASS_IOC_SET_YPR			_IOW(MSENSOR, 0x21, int[12])
-#endif
 #define ECOMPASS_IOC_GET_LAYOUT			_IOR(MSENSOR, 0X22, int)
 
 #ifdef CONFIG_COMPAT

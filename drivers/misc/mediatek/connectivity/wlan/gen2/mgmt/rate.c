@@ -95,7 +95,6 @@ const UINT_8 aucDataRate[] = {
 	RATE_HT_PHY		/* RATE_HT_PHY_INDEX */
 };
 
-#if 0
 static const UINT_8 aucDefaultAckCtsRateIndex[RATE_NUM] = {
 	RATE_1M_INDEX,		/* RATE_1M_INDEX = 0 */
 	RATE_2M_INDEX,		/* RATE_2M_INDEX */
@@ -112,7 +111,6 @@ static const UINT_8 aucDefaultAckCtsRateIndex[RATE_NUM] = {
 	RATE_24M_INDEX,		/* RATE_48M_INDEX */
 	RATE_24M_INDEX		/* RATE_54M_INDEX */
 };
-#endif
 
 const BOOLEAN afgIsOFDMRate[RATE_NUM] = {
 	FALSE,			/* RATE_1M_INDEX = 0 */

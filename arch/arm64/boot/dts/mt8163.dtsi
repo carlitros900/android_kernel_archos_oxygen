@@ -111,11 +111,6 @@
 			reg = <0 0x44400000 0 0x10000>;
 		};
 
-		pstore-reserved-memory@44410000 {
-			compatible = "mediatek,pstore";
-			reg = <0 0x44410000 0 0xe0000>;
-		};
-
 		minirdump-reserved-memory@444f0000{
 			compatible = "mediatek,minirdump";
 			reg = <0 0x444f0000 0 0x10000>;
@@ -742,7 +737,7 @@
 			reg = <0 0x11007000 0 0x70>,
 			      <0 0x11000180 0 0x80>;
 			interrupts = <GIC_SPI 84 IRQ_TYPE_LEVEL_LOW>;
-			clock-div = <8>;
+			clock-div = <10>;
 			clocks = <&infracfg CLK_INFRA_I2C0>, <&infracfg CLK_INFRA_AP_DMA>;
 			clock-names = "main", "dma";
 			#address-cells = <1>;
@@ -755,7 +750,7 @@
 			reg = <0 0x11008000 0 0x70>,
 			      <0 0x11000200 0 0x80>;
 			interrupts = <GIC_SPI 85 IRQ_TYPE_LEVEL_LOW>;
-			clock-div = <8>;
+			clock-div = <10>;
 			clocks = <&infracfg CLK_INFRA_I2C1>, <&infracfg CLK_INFRA_AP_DMA>;
 			clock-names = "main", "dma";
 			#address-cells = <1>;
@@ -1505,6 +1500,10 @@
 			compatible = "mediatek,gps";
 		};
 
+		mhall: mhall {
+			compatible = "mediatek, mhall";
+		};
+
 /* sensor part */
 		hwmsensor@0 {
 			compatible = "mediatek,hwmsensor";
@@ -1532,57 +1531,26 @@
 		};
 /* sensor end */
 
-		/* led part */
-		led0:led@0 {
-			compatible = "mediatek,red";
-			led_mode = <3>;
-			data = <8>;
-			pwm_config = <0 0 0 0 0>;
+/*sensorhub part*/
+		shf{
+			compatible = "mediatek,shf";
 		};
-
-		led1:led@1 {
-			compatible = "mediatek,green";
-			led_mode = <3>;
-			data = <7>;
-			pwm_config = <0 0 0 0 0>;
+/*sensorhub end*/
+		step_counter@0 {
+			compatible = "mediatek,step_counter";
 		};
-
-		led2:led@2 {
-			compatible = "mediatek,blue";
-			led_mode = <3>;
-			data = <6>;
-			pwm_config = <0 0 0 0 0>;
+		shake@0 {
+			compatible = "mediatek,shake";
 		};
-
-		led3:led@3 {
-			compatible = "mediatek,jogball-backlight";
-			led_mode = <0>;
-			data = < >;
-			pwm_config = <0 0 0 0 0>;
+		m_shk_pl@0 {
+			compatible = "mediatek,m_shk_pl";
 		};
-
-		led4:led@4 {
-			compatible = "mediatek,keyboard-backlight";
-			led_mode = <0>;
-			data = < >;
-			pwm_config = <0 0 0 0 0>;
+		face_down@0 {
+			compatible = "mediatek,face_down";
 		};
-
-		led5:led@5 {
-			compatible = "mediatek,button-backlight";
-			led_mode = <0>;
-			data = < >;
-			pwm_config = <0 0 0 0 0>;
+		m_fdn_pl@0 {
+			compatible = "mediatek,m_fdn_pl";
 		};
-
-		led6:led@6 {
-			compatible = "mediatek,lcd-backlight";
-			led_mode = <5>;
-			data = < >;
-			pwm_config = <0 0 0 0 0>;
-			gpios = <&pio 43 0>;
-		};
-/* led end*/
 
 		mtkfb: mtkfb@0 {
 			compatible = "mediatek,MTKFB";
@@ -1709,22 +1677,8 @@
 		};
 	};
 
-        lcm: lcm {
+	lcm: lcm {
 		compatible = "mediatek,lcm";
 	};
-        
-        lcm_kd: lcm_kd {
-        	compatible = "mediatek,lcm_kd";
-        };
-
-        lcm_wy: lcm_wy {
-        	compatible = "mediatek,lcm_wy";
-        };
-		 lcm_hnh: lcm_hnh {
-        	compatible = "mediatek,lcm_hnh";
-        };
-		lcm_xfk: lcm_xfk {
-        	compatible = "mediatek,lcm_xfk";
-        };
 };
 

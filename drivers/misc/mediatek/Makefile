@@ -1,4 +1,3 @@
-include $(srctree)/drivers/misc/mediatek/Makefile.custom
 #$(call all-subdir-src-or-makefile)
 MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
 subdir-ccflags-y += -Werror
@@ -7,7 +6,6 @@ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
 subdir-ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/$(MTK_PLATFORM)
-subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/lcm/inc
 
 obj-$(CONFIG_MTK_BASE_POWER) += base/
 obj-$(CONFIG_MTK_POWER_GS) += power_gs/
@@ -92,6 +90,7 @@ obj-$(CONFIG_MTK_BOOT_REASON) += boot_reason/
 obj-$(CONFIG_MTK_CHIP) += chip/
 obj-$(CONFIG_MTK_DEVAPC_DRIVER) += devapc/
 obj-$(CONFIG_MTK_DEVINFO_DRIVER) += devinfo/
+obj-$(CONFIG_MTK_LCM) += lcm/
 obj-y += ext_disp/
 obj-$(CONFIG_MTK_HDMI_SUPPORT) += hdmi/
 obj-$(CONFIG_MTK_FB) += video/
@@ -104,18 +103,7 @@ obj-$(CONFIG_MTK_FREQ_HOPPING) += freqhopping/
 obj-$(CONFIG_MTK_SECURITY_SW_SUPPORT) +=masp/
 obj-$(CONFIG_MEDIATEK_SOLUTION)  += sched/
 obj-y += cameraisp/src/
-
-ifeq ($(wildcard $(MTK_CUSTOM_PATH)/mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/imgsensor),)
 obj-$(CONFIG_MTK_IMGSENSOR) += imgsensor/src/
-else
-obj-$(CONFIG_MTK_IMGSENSOR) += mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/imgsensor/src/
-endif
-
-#ifneq ($(wildcard $(MTK_CUSTOM_PATH)/mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/lcm),)
-#obj-$(CONFIG_MTK_LCM) += lcm/
-obj-$(CONFIG_MTK_LCM) += mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/lcm/
-#endif
-
 obj-$(CONFIG_MTK_CAM_CAL) += cam_cal/src/
 obj-$(CONFIG_MTK_LENS)   += lens/
 obj-$(CONFIG_MTK_FLASHLIGHT)	+= flashlight/src/

@@ -46,7 +46,6 @@
 #ifdef CONFIG_COMPAT
 #define COMPAT_TPD_GET_FILTER_PARA _IOWR(TOUCH_IOC_MAGIC, 2, struct tpd_filter_t)
 #endif
-#define TPD_GET_ATA_PARA _IOWR(TOUCH_IOC_MAGIC,3,struct tpd_filter_t) 
 struct tpd_filter_t tpd_filter;
 struct tpd_dts_info tpd_dts_data;
 struct pinctrl *pinctrl1;
@@ -64,7 +63,7 @@ struct of_device_id touch_of_match[] = {
 	{ .compatible = "mediatek,mt7623-touch", },
 	{},
 };
-extern  int ctp_factory_test (void);
+
 void tpd_get_dts_info(void)
 {
 	struct device_node *node1 = NULL;
@@ -77,6 +76,8 @@ void tpd_get_dts_info(void)
 		pr_debug("[tpd]use-tpd-button = %d\n", tpd_dts_data.use_tpd_button);
 		of_property_read_u32_array(node1, "tpd-resolution",
 			tpd_dts_data.tpd_resolution, ARRAY_SIZE(tpd_dts_data.tpd_resolution));
+		of_property_read_u32_array(node1, "tpd-convert-ratio",
+			tpd_dts_data.tpd_convert_ratio, ARRAY_SIZE(tpd_dts_data.tpd_convert_ratio));
 		if (tpd_dts_data.use_tpd_button) {
 			of_property_read_u32(node1, "tpd-key-num", &tpd_dts_data.tpd_key_num);
 			of_property_read_u32_array(node1, "tpd-key-local",
@@ -216,9 +217,7 @@ static long tpd_compat_ioctl(struct file *file, unsigned int cmd, unsigned long 
 			pr_err("TPD_GET_FILTER_PARA unlocked_ioctl failed.");
 			return ret;
 		}
-	case 0xff:
-
-		
+		break;
 	default:
 		pr_err("tpd: unknown IOCTL: 0x%08x\n", cmd);
 		ret = -ENOIOCTLCMD;
@@ -233,8 +232,7 @@ static long tpd_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 	void __user *data;
 
 	long err = 0;
-	/* int result=0; */
-	printk("xingkun test1 %s\n",__func__); 
+
 	if (_IOC_DIR(cmd) & _IOC_READ)
 		err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
 	else if (_IOC_DIR(cmd) & _IOC_WRITE)
@@ -243,7 +241,7 @@ static long tpd_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 		pr_err("tpd: access error: %08X, (%2d, %2d)\n", cmd, _IOC_DIR(cmd), _IOC_SIZE(cmd));
 		return -EFAULT;
 	}
-	printk("xingkun test2 %s,%d\n",__func__,cmd);
+
 	switch (cmd) {
 	case TPD_GET_VELOCITY_CUSTOM_X:
 		data = (void __user *)arg;
@@ -289,21 +287,6 @@ static long tpd_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned lon
 				break;
 			}
 			break;
-		/*case TPD_GET_ATA_PARA :
-			data = (void __user *) arg;
-			
-			result = ctp_factory_test();
-			if(0 == result)
-				result = 1;
-			else
-				result = 0;
-			if(copy_to_user(data,&result,sizeof(result)))
-			{
-			   printk("tpd: TPD_GET_ATA_PARA IOCTL CMD: copy data error\n");
-				err = -EFAULT;
-                break;
-			}
-			break;*/
 	default:
 		pr_err("tpd: unknown IOCTL: 0x%08x\n", cmd);
 		err = -ENOIOCTLCMD;
@@ -406,7 +389,7 @@ static int tpd_fb_notifier_callback(struct notifier_block *self, unsigned long e
 		break;
 	case FB_BLANK_POWERDOWN:
 		TPD_DMESG("LCD OFF Notify\n");
-		if (g_tpd_drv) {
+		if (g_tpd_drv && !tpd_suspend_flag) {
 			err = cancel_work_sync(&touch_resume_work);
 			if (!err)
 				TPD_DMESG("cancel touch_resume_workqueue err = %d\n", err);

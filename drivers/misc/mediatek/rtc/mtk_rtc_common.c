@@ -393,21 +393,11 @@ void rtc_bbpu_power_down(void)
 	spin_unlock_irqrestore(&rtc_lock, flags);
 }
 
-void rtc_clear_hard_reset(void)
-{
-       unsigned long flags;
-       spin_lock_irqsave(&rtc_lock, flags);
-       hal_rtc_clear_hard_reset();
-       spin_unlock_irqrestore(&rtc_lock, flags);
-}
-
 void mt_power_off(void)
 {
 #if !defined(CONFIG_POWER_EXT)
 	int count = 0;
 #endif
-	rtc_xinfo("rtc_clear_hard_reset\n");
-	rtc_clear_hard_reset();
 	rtc_xinfo("mt_power_off\n");
 
 	/* pull PWRBB low */
@@ -725,11 +715,6 @@ static struct rtc_class_ops rtc_ops = {
 static int rtc_pdrv_probe(struct platform_device *pdev)
 {
 	unsigned long flags;
-	{//zzlin add start
-		if (get_boot_mode() == NORMAL_BOOT)
-                       hal_rtc_mark_hard_reset();
-        } //zzlin_add_end
-
 
 	/* only enable LPD interrupt in engineering build */
 	spin_lock_irqsave(&rtc_lock, flags);

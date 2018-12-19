@@ -105,16 +105,11 @@ static int mAudio_Analog_Mic2_mode = AUDIO_ANALOGUL_MODE_ACC;
 static int mAudio_Analog_Mic3_mode = AUDIO_ANALOGUL_MODE_ACC;
 static int mAudio_Analog_Mic4_mode = AUDIO_ANALOGUL_MODE_ACC;
 
-#if 0
 static const int DC1unit_in_uv = 19184;	/* in uv with 0DB */
 static const int DC1devider = 8;	/* in uv */
-#endif
 /* Headphone DC calibration */
 static int mHpLeftDcCalibration;
 static int mHpRightDcCalibration;
-extern struct pinctrl *emdoor_aud;//add by tubao
-extern struct pinctrl_state *emdoor_aud_gpio_high;//add by tubao
-extern struct pinctrl_state *emdoor_aud_gpio_low;//add by tubao
 
 #if 0 /* currently not used */
 static uint32 RG_AUDHPLTRIM_VAUDP15, RG_AUDHPRTRIM_VAUDP15,
@@ -129,9 +124,7 @@ static unsigned int Speaker_pga_gain = 1;	/* default 0Db. */
 static bool mSpeaker_Ocflag;
 #endif
 
-/*
 static const int mDcOffsetTrimChannel = 9;
-*/
 static bool mInitCodec;
 
 static void Audio_Amp_Change(int channels, bool enable);
@@ -599,6 +592,7 @@ uint32 GetDLFrequency(uint32 frequency)
 		break;
 	case 48000:
 		Reg_value = 10;
+		break;
 	default:
 		pr_warn("%s, not supported frequency, return with default 8K\n", __func__);
 	}
@@ -915,9 +909,11 @@ uint32 GetDLNewIFFrequency(unsigned int frequency)
 		break;
 	case 48000:
 		Reg_value = 8;
+		break;
 	default:
 		pr_warn("%s, not supported frequency, return with default 8K\n", __func__);
 	}
+	PRINTK_AUDDRV("%s frequency = %d Reg_value = %d\n", __func__, frequency, Reg_value);
 	return Reg_value;
 }
 
@@ -933,10 +929,11 @@ uint32 GetULNewIFFrequency(unsigned int frequency)
 		break;
 	case 48000:
 		Reg_value = 3;
+		break;
 	default:
 		pr_warn("%s, not supported frequency %d\n", __func__, frequency);
 	}
-	PRINTK_AUDDRV("%s Reg_value = %d\n", __func__, Reg_value);
+	PRINTK_AUDDRV("%s frequency = %d Reg_value = %d\n", __func__, frequency, Reg_value);
 	return Reg_value;
 }
 
@@ -1111,6 +1108,245 @@ static void Audio_Amp_Change(int channels, bool enable)
 	}
 }
 
+#ifdef CONFIG_EXT_HP_AMP
+#ifdef CONFIG_TPA6130A_HP_AMP
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include <linux/init.h>
+#include <linux/list.h>
+#include <linux/i2c.h>
+#include <linux/irq.h>
+#include <linux/uaccess.h>
+#include <linux/interrupt.h>
+#include <linux/io.h>
+#include <linux/platform_device.h>
+/*****************************************************************************
+ * Define
+ *****************************************************************************/
+
+#define HP_ENABLE			1
+#define HP_DISABLE			0
+
+#define STEREO_MODE				0x00
+#define DUAL_MONO_MODE			0x01
+#define BRIDGE_TIED_LOAD_MODE	0x02
+
+#define THERMAL_ENABLE	1
+#define THERMAL_DISABLE	0
+
+#define SOFTWARE_SHUTDOWN_ENABLE	1
+#define SOFTWARE_SHUTDOWN_DISABLE	0
+
+#define MUTE_ENABLE		1
+#define MUTE_DISABLE		0
+
+#define HIZ_ENABLE		1
+#define HIZ_DISABLE		0
+
+#define HP_EN_BIT		((HP_ENABLE<<7) |(HP_ENABLE<<6) )
+#define MODE_BIT		(STEREO_MODE<<4)
+#define THERMAL_BIT	(THERMAL_ENABLE<<1)
+#define SWS_BIT		(SOFTWARE_SHUTDOWN_DISABLE<<0)
+#define MUTE_BIT		((MUTE_DISABLE<<7) |(MUTE_DISABLE<<6) )
+#define VOLUME_BIT	0x1F
+#define HIZ_BIT			((HIZ_DISABLE<<1) |(HIZ_DISABLE<<0) )
+
+/*****************************************************************************
+ * GLobal Variable
+ *****************************************************************************/
+static struct i2c_client *tpa6130a_i2c_client = NULL;
+
+
+/*****************************************************************************
+ * Function Prototype
+ *****************************************************************************/
+static int tpa6130a_probe(struct i2c_client *client, const struct i2c_device_id *id);
+/*****************************************************************************
+ * Data Structure
+ *****************************************************************************/
+
+ struct tpa6130a_dev	{
+	struct i2c_client	*client;
+};
+
+#ifdef CONFIG_OF
+static const struct of_device_id tpa6130a_id[] = {
+	{ .compatible = "ti,tpa6130a" },
+	{},
+};
+MODULE_DEVICE_TABLE(of, tpa6130a_id);
+#endif
+
+static const struct i2c_device_id tpa6130a_i2c_id[] = {
+	{ "tpa6130a", 0 },
+	{ }
+};
+
+static struct i2c_driver tpa6130a_iic_driver = {
+	.id_table	= tpa6130a_i2c_id,
+	.probe		= tpa6130a_probe,
+	.driver		= {
+		.name	= "tpa6130a",
+#ifdef CONFIG_OF
+		.of_match_table = of_match_ptr(tpa6130a_id),
+#endif
+	},
+};
+/*****************************************************************************
+ * Extern Area
+ *****************************************************************************/
+
+
+/*****************************************************************************
+ * Function
+ *****************************************************************************/
+//static int tpa6130a_read_bytes(u8 addr, u8 *data)
+//{
+//	u8 buf;
+//	int ret = 0;
+//	struct i2c_client *client = tpa6130a_i2c_client;
+
+//	buf = addr;
+//	ret = i2c_master_send(client, (const char*)&buf, 1<<8 | 1);
+//	if (ret < 0) {
+//		printk("tpa6130a send data fail !!\n");
+//		return ret;
+//	}
+//
+//	ret = i2c_master_recv(client,  (char*)&buf, 1<<8 | 1);
+//	if(ret  < 0) {
+//		printk("tpa6130a recv data fail !!\n");
+//		return ret;
+//	}
+
+//	*data = buf;
+
+//	return 0;
+//}
+
+static int tpa6130a_write_bytes(unsigned char addr, unsigned char value)
+{
+	int ret = 0;
+	struct i2c_client *client = tpa6130a_i2c_client;
+	char write_data[2]={0};
+
+	write_data[0]= addr;
+	write_data[1] = value;
+
+	ret=i2c_master_send(client, write_data, 2);
+	if(ret<0)
+		printk("tpa6130a write data fail !!\n");
+	else
+		printk("%s: (0x%04X) (0x%02X)= %02X\n", __func__, client->addr, addr, value);
+
+	return ret ;
+}
+
+static int tpa6130a_probe(struct i2c_client *client, const struct i2c_device_id *id)
+{
+//	int ret = 0;
+//	u8 version_value = 0;
+
+	printk("TPA6130A: info==>name=%s addr=0x%x\n",client->name,client->addr);
+
+	tpa6130a_i2c_client  = client;
+
+//	AudDrv_GPIO_HP_EXTAMP_Select(true);
+
+
+//	msleep(10);
+
+//	ret = tpa6130a_read_bytes(0x04, &version_value);
+//	if(ret < 0){
+//		printk("tpa6130a_read_bytes failed\n");
+//		return ret;
+//	}else
+//		printk("%s: version = 0x%x\n", __func__, version_value);
+
+//	AudDrv_GPIO_HP_EXTAMP_Select(false);
+
+	return 0;
+}
+
+static void tpa6130a_set_amp(bool enable)
+{
+	if(enable)
+	{
+		tpa6130a_write_bytes(0x1, HP_EN_BIT | MODE_BIT |(0x00<< 2)  | THERMAL_BIT | SWS_BIT);
+		tpa6130a_write_bytes(0x2, MUTE_BIT | VOLUME_BIT);
+		tpa6130a_write_bytes(0x3, HIZ_BIT);
+	}else{
+		tpa6130a_write_bytes(0x1, (HIZ_DISABLE<<7) |(HIZ_DISABLE<<6) | MODE_BIT |(0x00<< 2) |THERMAL_BIT |(SOFTWARE_SHUTDOWN_ENABLE<<0));
+		tpa6130a_write_bytes(0x2, (MUTE_ENABLE<<7) |(MUTE_ENABLE<<6) | VOLUME_BIT);
+		tpa6130a_write_bytes(0x3, (HIZ_ENABLE<<1) |(HIZ_ENABLE<<0));
+	}
+}
+
+
+/*
+ * module load/unload record keeping
+ */
+
+static int __init tpa6130a_iic_init(void)
+{
+	printk( "tpa6130a_iic_init\n");
+	i2c_add_driver(&tpa6130a_iic_driver);
+
+	return 0;
+}
+
+static void __exit tpa6130a_iic_exit(void)
+{
+	printk( "tpa6130a_iic_exit\n");
+	i2c_del_driver(&tpa6130a_iic_driver);
+}
+
+
+late_initcall(tpa6130a_iic_init);
+module_exit(tpa6130a_iic_exit);
+
+MODULE_AUTHOR("yyqing");
+MODULE_DESCRIPTION("MTK TPA6130A I2C Driver");
+MODULE_LICENSE("GPL");
+#endif
+
+
+static void Ext_Hp_Amp_Change(bool enable)
+{
+#define HP_WARM_UP_TIME        (25) //unit is ms
+
+	if (enable)
+	{
+		printk("Ext_Hp_Amp_Change ON+ \n");
+
+		printk("Ext_Hp_Amp_Change ON set GPIO \n");
+		AudDrv_GPIO_HP_EXTAMP_Select(false);
+		udelay(1000);
+		AudDrv_GPIO_HP_EXTAMP_Select(true);
+
+#ifdef CONFIG_TPA6130A_HP_AMP
+		AudDrv_GPIO_HP_EXTAMP_Select(true);
+		mdelay(10);
+		tpa6130a_set_amp(true);
+#endif
+		mdelay(HP_WARM_UP_TIME);
+
+		printk("Ext_Hp_Amp_Change ON- \n");
+	}
+	else
+	{
+		printk("Ext_Hp_Amp_Change OFF+ \n");
+
+		AudDrv_GPIO_HP_EXTAMP_Select(false);
+		udelay(500);
+
+		printk("Ext_Hp_Amp_Change OFF- \n");
+	}
+}
+#endif
+
 static int Audio_AmpL_Get(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value *ucontrol)
 {
 	PRINTK_AUDDRV("Audio_AmpL_Get = %d\n",
@@ -1126,12 +1362,18 @@ static int Audio_AmpL_Set(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_val
 	PRINTK_AUDDRV("%s() gain = %ld\n", __func__, ucontrol->value.integer.value[0]);
 	if ((ucontrol->value.integer.value[0] == true)
 	    && (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] == false)) {
+		#ifdef CONFIG_EXT_HP_AMP
+		Ext_Hp_Amp_Change(true);
+		#endif
 		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, true);
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] =
 		    ucontrol->value.integer.value[0];
 	} else if ((ucontrol->value.integer.value[0] == false)
 		   && (mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] ==
 		       true)) {
+		#ifdef CONFIG_EXT_HP_AMP
+		Ext_Hp_Amp_Change(false);
+		#endif
 		mCodec_data->mAudio_Ana_DevicePower[AUDIO_ANALOG_DEVICE_OUT_HEADSETL] =
 		    ucontrol->value.integer.value[0];
 		Audio_Amp_Change(AUDIO_ANALOG_CHANNELS_LEFT1, false);
@@ -1418,9 +1660,163 @@ do { \
 } while (0)
 #endif
 
+#ifdef  CONFIG_AW8738_SPEAKER_AMP
+/* 0.75us<TL<10us; 0.75us<TH<10us */
+#define GAP (2) //unit: us
+#define AW8738_MODE1 /*1.2w*/ \
+    AudDrv_GPIO_EXTAMP_Select(true);
+
+#define AW8738_MODE2 /*1.0w*/ \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);
+
+#define AW8738_MODE3 /*0.8w*/ \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);
+
+#define AW8738_MODE4 /*0.6w*/ \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);
+
+#define AW8738_MODE5 /*Multi-Level AGC : 0.8W*/ \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);
+
+#define AW8738_MODE6 /*Multi-Level AGC : 0.6W*/ \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);\
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);
+
+#define AW8738_MODE7 /*it depends on THD, range: 1.83w*/ \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);\
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);
+#endif
+
+#ifdef CONFIG_AW8736_SPEAKER_AMP
+/* 0.75us<TL<10us; 0.75us<TH<10us */
+#define GAP (2) //unit: us
+#define AW8736_MODE1 /*1.2w*/ \
+    AudDrv_GPIO_EXTAMP_Select(true);
+
+#define AW8736_MODE2 /*1.0w*/ \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);
+
+#define AW8736_MODE3 /*0.8w*/ \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);
+
+#define AW8736_MODE4 /*0.6w*/ \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(false); \
+    udelay(GAP); \
+    AudDrv_GPIO_EXTAMP_Select(true);
+#endif
 static void Ext_Speaker_Amp_Change(bool enable)
 {
-#define SPK_WARM_UP_TIME        (25)	/* unit is ms */
+#if defined(CONFIG_AW8738_SPEAKER_AMP)
+#define SPK_WARM_UP_TIME        (100)	/* unit is ms */
+#elif defined(CONFIG_AW8736_SPEAKER_AMP)
+	#define SPK_WARM_UP_TIME        (25)	/* unit is ms */
+#else
+	#define SPK_WARM_UP_TIME        (25)	/* unit is ms */
+#endif
 
 #if defined(CONFIG_MTK_LEGACY)
 	int ret;
@@ -1434,7 +1830,7 @@ static void Ext_Speaker_Amp_Change(bool enable)
 
 	if (enable) {
 		PRINTK_AUDDRV("Ext_Speaker_Amp_Change ON+\n");
-#if !defined(CONFIG_MTK_SPEAKER) || defined(CONFIG_EMDOOR_T8611B_PROJECT)
+#ifndef CONFIG_MTK_SPEAKER
 
 #if defined(CONFIG_MTK_LEGACY)
 		mt_set_gpio_mode(pin_extspkamp, GPIO_MODE_00);	/* GPIO24: mode 0 */
@@ -1457,20 +1853,20 @@ static void Ext_Speaker_Amp_Change(bool enable)
 #endif
 
 #else
+#if defined(CONFIG_AW8738_SPEAKER_AMP)
+		AW8738_MODE5;
+#elif defined(CONFIG_AW8736_SPEAKER_AMP)
+		AW8736_MODE3;
+#else
 		AudDrv_GPIO_EXTAMP_Select(true);
+#endif
 #endif /*CONFIG_MTK_LEGACY*/
 
-		msleep(SPK_WARM_UP_TIME);
-#endif
-#ifdef CONFIG_MTK_EXTAMP_PA_CONTROL_GPIO
-		pinctrl_select_state(emdoor_aud,emdoor_aud_gpio_high);//add by tubao
+		mdelay(SPK_WARM_UP_TIME);
 #endif
 	} else {
 		PRINTK_AUDDRV("Ext_Speaker_Amp_Change OFF+\n");
-#ifdef CONFIG_MTK_EXTAMP_PA_CONTROL_GPIO
-		pinctrl_select_state(emdoor_aud,emdoor_aud_gpio_low);//add by tubao
-#endif
-#if !defined(CONFIG_MTK_SPEAKER) || defined(CONFIG_EMDOOR_T8611B_PROJECT)
+#ifndef CONFIG_MTK_SPEAKER
 
 #if defined(CONFIG_MTK_LEGACY)
 		/* mt_set_gpio_mode(pin_extspkamp, GPIO_MODE_00); //GPIO24: mode 0 */
@@ -1552,7 +1948,7 @@ static void Ext_Speaker_Amp_Change(bool enable)
 #else
 		mt_set_gpio_out(GPIO_EXT_SPKAMP_EN_PIN, GPIO_OUT_ONE);	/* high enable */
 #endif
-		msleep(SPK_WARM_UP_TIME);
+		mdelay(SPK_WARM_UP_TIME);
 #endif
 		PRINTK_AUDDRV("Ext_Speaker_Amp_Change ON-\n");
 	} else {
@@ -1783,10 +2179,8 @@ static const char * const speaker_PGA_function[] = {
 	"11Db", "12Db", "13Db", "14Db", "15Db", "16Db", "17Db"
 };
 static const char * const speaker_OC_function[] = { "Off", "On" };
-/*
 static const char * const speaker_CS_function[] = { "Off", "On" };
 static const char * const speaker_CSPeakDetecReset_function[] = { "Off", "On" };
-*/
 
 static int Audio_Speaker_Class_Set(struct snd_kcontrol *kcontrol,
 				   struct snd_ctl_elem_value *ucontrol)
@@ -2337,15 +2731,11 @@ static bool TurnOnADcPowerDCCECM(int ADCType, bool enable)
 
 /* here start uplink power function */
 static const char * const ADC_function[] = { "Off", "On" };
-/*
 static const char * const ADC_power_mode[] = { "normal", "lowpower" };
-*/
 static const char * const PreAmp_Mux_function[] = { "OPEN", "IN_ADC1", "IN_ADC2", "IN_ADC3" };
 static const char * const ADC_UL_PGA_GAIN[] = { "-6Db", "0Db", "6Db", "12Db", "18Db", "24Db" };
 static const char * const Pmic_Digital_Mux[] = { "ADC1", "ADC2", "ADC3", "ADC4" };
-/*
 static const char * const Adc_Input_Sel[] = { "idle", "AIN", "Preamp" };
-*/
 
 static const char * const Audio_AnalogMic_Mode[] = {
 	"ACCMODE", "DCCMODE", "DMIC", "DCCECMDIFFMODE", "DCCECMSINGLEMODE"};
@@ -3421,9 +3811,6 @@ static int __init mtk_mt6323_codec_init(void)
 	int ret = 0;
 
 	pr_debug("%s\n", __func__);
-#ifdef CONFIG_MTK_EXTAMP_PA_CONTROL_GPIO
-	pinctrl_select_state(emdoor_aud,emdoor_aud_gpio_low);//add by tubao
-#endif
 #ifdef CONFIG_OF
 	/* Auddrv_getGPIO_info(); */
 #else

@@ -138,7 +138,10 @@ static char *DISO_state_s[8] = {
 /*extern function*/
 /*============================================================*/
 static unsigned int charging_error;
+/*start-xmyyq-20160429-Add charger config to pass CE*/
+#ifndef CONFIG_BATTERY_CHARGER_CE
 static unsigned int charging_get_error_state(void);
+#endif
 static unsigned int charging_set_error_state(void *data);
 
 /*============================================================*/
@@ -229,22 +232,26 @@ static unsigned int charging_hw_init(void *data)
 #endif
 
 	bq24296_set_en_hiz(0x0);
-	bq24296_set_vindpm(0xA); /*VIN DPM check 4.68V*/
+	bq24296_set_vindpm(0x7); /*VIN DPM check 4.44V*/
 	bq24296_set_reg_rst(0x0);
 	bq24296_set_wdt_rst(0x1); /*Kick watchdog*/
 	bq24296_set_sys_min(0x5); /*Minimum system voltage 3.5V*/
 	bq24296_set_iprechg(0x3); /*Precharge current 512mA*/
 	bq24296_set_iterm(0x0); /*Termination current 128mA*/
 
-#if defined(HIGH_BATTERY_VOLTAGE_SUPPORT)
-#if 1 /*if use BQ24296M, modify this condition to 0*/
+/*start-xmyyq-160406-add high battery voltage setting*/
+//#if defined(HIGH_BATTERY_VOLTAGE_SUPPORT)
+if (batt_cust_data.high_battery_voltage_support)
+{
+#if 0 /*if use BQ24296M, modify this condition to 0*/
 	bq24296_set_vreg(0x32); /*VREG 4.304V*/
 #else
-	bq24296_set_vreg(0x37); /*VREG 4.352V*/
+	bq24296_set_vreg(0x35); /*VREG 4.352V*/
 #endif
-#else
+}
+else
 	bq24296_set_vreg(0x2C); /*VREG 4.208V*/
-#endif
+
 
 	bq24296_set_batlowv(0x1); /*BATLOWV 3.0V*/
 	bq24296_set_vrechg(0x0); /*VRECHG 0.1V (4.108V)*/
@@ -280,7 +287,12 @@ static unsigned int charging_enable(void *data)
 		if (mt_usb_is_device())
 	#endif
 			bq24296_set_chg_config(0x0);
+/*start-xmyyq-20160429-Add charger config to pass CE*/
+#ifdef CONFIG_BATTERY_CHARGER_CE
+		if (1) {
+#else
 		if (charging_get_error_state()) {
+#endif /*end-xmyyq-20160429-Add charger config to pass CE*/
 			battery_log(BAT_LOG_CRTI, "[charging_enable] bq24296_set_en_hiz(0x1)\n");
 			bq24296_set_en_hiz(0x1);	/* disable power path */
 		}
@@ -294,19 +306,15 @@ static unsigned int charging_set_cv_voltage(void *data)
 	unsigned short register_value;
 	unsigned int cv_value = *(unsigned int *)(data);
 
-	if (cv_value == BATTERY_VOLT_04_200000_V) {
-	#if defined(HIGH_BATTERY_VOLTAGE_SUPPORT)
-		/*highest of voltage will be 4.3V, because powerpath limitation*/
-#if 1 /*if use BQ24296M, modify this condition to 0*/
-		cv_value = 4304000;
-#else
-		cv_value = 4352000;
-#endif
-	#else
-		/*use nearest value*/
+
+	if (cv_value == BATTERY_VOLT_04_200000_V)
 		cv_value = 4208000;
-	#endif
-	}
+	else if(cv_value == BATTERY_VOLT_04_350000_V)
+		cv_value = 4352000;
+	else
+	    cv_value = 4208000;
+
+
 	register_value = charging_parameter_to_value(VBAT_CV_VTH, GETARRAYNUM(VBAT_CV_VTH), cv_value);
 	bq24296_set_vreg(register_value);
 
@@ -377,7 +385,12 @@ static unsigned int charging_get_charging_status(void *data)
 
 	ret_val = bq24296_get_chrg_stat();
 
-	if (ret_val == 0x3)
+    /*start-xmyyq-20160429-Add charger config to pass CE*/
+#ifdef CONFIG_BATTERY_CHARGER_CE
+        if((ret_val == 0x3)||((upmu_get_rgs_chrdet()==KAL_TRUE)&&(ret_val == 0)))
+#else
+        if (ret_val == 0x3)
+#endif  /*end-xmyyq-20160429-Add charger config to pass CE*/
 		*(unsigned int *)data = KAL_TRUE;
 	else
 		*(unsigned int *)data = KAL_FALSE;
@@ -922,11 +935,13 @@ int diso_thread_kthread(void *x)
 #endif
 #endif
 
-
+/*start-xmyyq-20160429-Add charger config to pass CE*/
+#ifndef CONFIG_BATTERY_CHARGER_CE
 static unsigned int charging_get_error_state(void)
 {
 	return charging_error;
 }
+#endif
 
 static unsigned int charging_set_error_state(void *data)
 {

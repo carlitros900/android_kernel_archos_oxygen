@@ -45,7 +45,7 @@ void tbl_charger_otg_vbus(int mode)
 #ifdef CONFIG_MTK_BQ24296_SUPPORT
 		bq24296_set_chg_config(0x0); /*disable charge*/
 		bq24296_set_otg_config(0x1); /*OTG*/
-		bq24296_set_boostv(0x7); /*boost voltage 4.998V*/
+		bq24296_set_boostv(0x0a);   /*boost voltage 0x0a: 5.190v (10*64mv+4.55v), 0x0b:5.254v,0x0c:5.318v, wwj add*/
 		bq24296_set_boost_lim(0x1); /*1.5A on VBUS*/
 		bq24296_set_en_hiz(0x0);
 #endif

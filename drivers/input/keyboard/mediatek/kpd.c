@@ -27,6 +27,9 @@
 void __iomem *kp_base;
 static unsigned int kp_irqnr;
 struct input_dev *kpd_input_dev;
+#ifdef CONFIG_CUSTOM_KERNEL_KPD_MHALL
+static bool kpd_input_dev_flag=false;
+#endif
 static bool kpd_suspend;
 static int kpd_show_hw_keycode = 1;
 static int kpd_show_register = 1;
@@ -342,6 +345,21 @@ static void kpd_pwrkey_eint_handler(void)
 {
 	tasklet_schedule(&kpd_pwrkey_tasklet);
 }
+#endif
+
+#ifdef CONFIG_CUSTOM_KERNEL_KPD_MHALL
+bool kpd_hallkey_report(int slid)
+{
+   if(!kpd_input_dev_flag){
+      kpd_print("report MHALL kpd_input_dev_flag not ready");
+      return false;
+   }
+   input_report_switch(kpd_input_dev, SW_LID, ((0==slid) ? 1 : 0));
+   input_sync(kpd_input_dev);
+   kpd_print("report MHALL QWERTY = %s(%d)\n", slid ? "slid" : "closed", slid);
+   return true;
+}
+EXPORT_SYMBOL_GPL(kpd_hallkey_report);
 #endif
 /*********************************************************************/
 
@@ -847,7 +865,7 @@ static int kpd_pdrv_probe(struct platform_device *pdev)
 		__set_bit(kpd_auto_keymap[i], kpd_input_dev->keybit);
 #endif
 
-#if KPD_HAS_SLIDE_QWERTY
+#if KPD_HAS_SLIDE_QWERTY || defined(CONFIG_CUSTOM_KERNEL_KPD_MHALL)
 	__set_bit(EV_SW, kpd_input_dev->evbit);
 	__set_bit(SW_LID, kpd_input_dev->swbit);
 #endif
@@ -905,6 +923,9 @@ static int kpd_pdrv_probe(struct platform_device *pdev)
 		kpd_delete_attr(&kpd_pdrv.driver);
 		return err;
 	}
+    #ifdef CONFIG_CUSTOM_KERNEL_KPD_MHALL
+    kpd_input_dev_flag=true;
+    #endif
 	kpd_info("%s Done\n", __func__);
 	return 0;
 }

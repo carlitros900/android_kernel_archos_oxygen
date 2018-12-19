@@ -329,30 +329,3 @@ void hal_rtc_save_pwron_time(bool enable, struct rtc_time *tm, bool logo)
 	rtc_write(RTC_PDN1, pdn1);
 	rtc_write_trigger();
 }
-
-void hal_rtc_mark_hard_reset()
-{
-       u16 spar0;
-       printk(">>>>>>>>>>>>>>>> mark hard reset start >>>>>>>>>>>>>>>>>>\n");
-       spar0 = rtc_read(RTC_SPAR0) & (~RTC_SPAR0_HARD_RESET);
-       printk("rtc_read(RTC_SPAR0) = 0x%x\n", rtc_read(RTC_SPAR0));
-       printk("spar0= 0x%x\n", spar0);
-       rtc_write(RTC_SPAR0, spar0 | RTC_SPAR0_HARD_RESET);
-       printk("rtc_read(RTC_SPAR0) = 0x%x\n", rtc_read(RTC_SPAR0));
-       printk("spar0 | RTC_SPAR0_HARD_RESET = 0x%x\n", spar0 | RTC_SPAR0_HARD_RESET);
-       rtc_write_trigger();
-       printk(">>>>>>>>>>>>>>>> mark hard reset end >>>>>>>>>>>>>>>>>>\n");
-}
-void hal_rtc_clear_hard_reset()
-{
-       u16 spar0;
-       printk(">>>>>>>>>>>>>>>> clear hard reset start >>>>>>>>>>>>>>>>>>\n");
-       printk("rtc_read(RTC_SPAR0) = 0x%x\n", rtc_read(RTC_SPAR0));
-       spar0 = rtc_read(RTC_SPAR0) & (~RTC_SPAR0_HARD_RESET);
-       rtc_write(RTC_SPAR0, spar0);
-       printk("spar0= 0x%x\n", spar0);
-       rtc_write_trigger();
-       printk("rtc_read(RTC_SPAR0) = 0x%x\n", rtc_read(RTC_SPAR0));
-       printk(">>>>>>>>>>>>>>>> clear hard reset end >>>>>>>>>>>>>>>>>>\n");
-}
-

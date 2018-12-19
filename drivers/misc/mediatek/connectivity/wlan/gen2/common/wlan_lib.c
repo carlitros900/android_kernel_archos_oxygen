@@ -1607,6 +1607,10 @@ wlanAdapterStart(IN P_ADAPTER_T prAdapter,
 					    NULL, NULL, sizeof(CMD_SW_DBG_CTRL_T), (PUINT_8) (&rCmdSwCtrl), NULL, 0);
 		}
 #endif
+#if (CFG_SRAM_SIZE_OPTION == 1)
+		/* ALPS02494017 for DIR-635/DIR-655 IOT issue (BA size must be power of 2) */
+		nicQmSetRxBASize(prAdapter, true, IOT_RX_BA_SIZE);
+#endif
 
 #if 0
 		/* Update Auto rate parameters in FW */
@@ -1923,7 +1927,8 @@ WLAN_STATUS wlanProcessCommandQueue(IN P_ADAPTER_T prAdapter, IN P_QUE_T prCmdQu
 			if (rStatus == WLAN_STATUS_RESOURCES) {
 				/* no more TC4 resource for further transmission */
 				QUEUE_INSERT_TAIL(prMergeCmdQue, prQueueEntry);
-				DBGLOG(TX, EVENT, "No TC4 resource to send cmd, CID=%d, SEQ=%d, CMD type=%d, OID=%d\n",
+				DBGLOG(TX, EVENT,
+					"No TC4 resource to send cmd, CID=0x%x, SEQ=%d, CMD type=%d, OID=%d\n",
 					prCmdInfo->ucCID, prCmdInfo->ucCmdSeqNum,
 					prCmdInfo->eCmdType, prCmdInfo->fgIsOid);
 				break;
@@ -2005,6 +2010,7 @@ WLAN_STATUS wlanSendCommand(IN P_ADAPTER_T prAdapter, IN P_CMD_INFO_T prCmdInfo)
 	P_TX_CTRL_T prTxCtrl;
 	UINT_8 ucTC;		/* "Traffic Class" SW(Driver) resource classification */
 	WLAN_STATUS rStatus = WLAN_STATUS_SUCCESS;
+	BOOLEAN pfgIsSecOrMgmt = FALSE;
 
 	/* sanity check */
 	ASSERT(prAdapter);
@@ -2042,8 +2048,13 @@ WLAN_STATUS wlanSendCommand(IN P_ADAPTER_T prAdapter, IN P_CMD_INFO_T prCmdInfo)
 			/* <1.1> Assign Traffic Class(TC) = TC4. */
 			ucTC = TC4_INDEX;
 
+			if ((prCmdInfo->eCmdType == COMMAND_TYPE_SECURITY_FRAME) ||
+				(prCmdInfo->eCmdType == COMMAND_TYPE_MANAGEMENT_FRAME))
+				pfgIsSecOrMgmt = TRUE;
+
+			wlanReadFwStatus(prAdapter);
 			/* <1.2> Check if pending packet or resource was exhausted */
-			rStatus = nicTxAcquireResource(prAdapter, ucTC);
+			rStatus = nicTxAcquireResource(prAdapter, ucTC, pfgIsSecOrMgmt);
 			if (rStatus == WLAN_STATUS_RESOURCES) {
 				DbgPrint("NO Resource:%d\n", ucTC);
 				break;
@@ -2621,7 +2632,7 @@ WLAN_STATUS wlanSendNicPowerCtrlCmd(IN P_ADAPTER_T prAdapter, IN UINT_8 ucPowerM
 			break;
 		}
 		/* 3.1 Acquire TX Resource */
-		if (nicTxAcquireResource(prAdapter, ucTC) == WLAN_STATUS_RESOURCES) {
+		if (nicTxAcquireResource(prAdapter, ucTC, FALSE) == WLAN_STATUS_RESOURCES) {
 
 			/* wait and poll tx resource */
 			if (nicTxPollingResource(prAdapter, ucTC) != WLAN_STATUS_SUCCESS) {
@@ -2752,7 +2763,7 @@ wlanImageSectionDownloadAggregated(IN P_ADAPTER_T prAdapter,
 
 	/* 5.1 main loop for maximize transmission count per access */
 	while (u4Offset < u4ImgSecSize) {
-		if (nicTxAcquireResource(prAdapter, ucTC) == WLAN_STATUS_SUCCESS) {
+		if (nicTxAcquireResource(prAdapter, ucTC, FALSE) == WLAN_STATUS_SUCCESS) {
 			/* 5.1.1 calculate u4Length */
 			if (u4Offset + CMD_PKT_SIZE_FOR_IMAGE < u4ImgSecSize)
 				u4Length = CMD_PKT_SIZE_FOR_IMAGE;
@@ -2893,7 +2904,7 @@ wlanImageSectionDownload(IN P_ADAPTER_T prAdapter,
 	/* 6. Send FW_Download command */
 	while (1) {
 		/* 6.1 Acquire TX Resource */
-		if (nicTxAcquireResource(prAdapter, ucTC) == WLAN_STATUS_RESOURCES) {
+		if (nicTxAcquireResource(prAdapter, ucTC, FALSE) == WLAN_STATUS_RESOURCES) {
 			if (nicTxPollingResource(prAdapter, ucTC) != WLAN_STATUS_SUCCESS) {
 				u4Status = WLAN_STATUS_FAILURE;
 				DBGLOG(INIT, ERROR, "Fail to get TX resource return within timeout\n");
@@ -2971,7 +2982,7 @@ WLAN_STATUS wlanImageQueryStatus(IN P_ADAPTER_T prAdapter)
 	/* 5. Send command */
 	while (1) {
 		/* 5.1 Acquire TX Resource */
-		if (nicTxAcquireResource(prAdapter, ucTC) == WLAN_STATUS_RESOURCES) {
+		if (nicTxAcquireResource(prAdapter, ucTC, FALSE) == WLAN_STATUS_RESOURCES) {
 			if (nicTxPollingResource(prAdapter, ucTC) != WLAN_STATUS_SUCCESS) {
 				u4Status = WLAN_STATUS_FAILURE;
 				DBGLOG(INIT, ERROR, "Fail to get TX resource return within timeout\n");
@@ -3147,7 +3158,7 @@ WLAN_STATUS wlanConfigWifiFunc(IN P_ADAPTER_T prAdapter, IN BOOLEAN fgEnable, IN
 	/* 5. Seend WIFI start command */
 	while (1) {
 		/* 5.1 Acquire TX Resource */
-		if (nicTxAcquireResource(prAdapter, ucTC) == WLAN_STATUS_RESOURCES) {
+		if (nicTxAcquireResource(prAdapter, ucTC, FALSE) == WLAN_STATUS_RESOURCES) {
 
 			/* wait and poll tx resource */
 			if (nicTxPollingResource(prAdapter, ucTC) != WLAN_STATUS_SUCCESS) {
@@ -4446,6 +4457,30 @@ static VOID wlanChangeNvram6620to6628(PUINT_8 pucEFUSE)
 }
 #endif
 
+ENUM_BAND_EDGE_CERT_T getBandEdgeCert(P_ADAPTER_T prAdapter)
+{
+	P_DOMAIN_INFO_ENTRY prDomainInfo;
+	P_DOMAIN_SUBBAND_INFO prSubband;
+	UINT32 i;
+
+	prDomainInfo = rlmDomainGetDomainInfo(prAdapter);
+	ASSERT(prDomainInfo);
+
+	for (i = 0; i < MAX_SUBBAND_NUM; i++) {
+		prSubband = &prDomainInfo->rSubBand[i];
+
+		if (prSubband->ucBand == BAND_2G4) {
+			if (prSubband->ucFirstChannelNum == 1) {
+				if (prSubband->ucNumChannels == 13)
+					return BAND_EDGE_CERT_KCC;
+				else
+					return BAND_EDGE_CERT_FCC;
+			}
+		}
+	}
+	return BAND_EDGE_CERT_FCC;
+}
+
 /*----------------------------------------------------------------------------*/
 /*!
 * @brief This function is called to load manufacture data from NVRAM
@@ -4555,6 +4590,7 @@ WLAN_STATUS wlanLoadManufactureData(IN P_ADAPTER_T prAdapter, IN P_REG_INFO_T pr
 		rCmdEdgeTxPwrLimit.cBandEdgeMaxPwrCCK = prRegInfo->cBandEdgeMaxPwrCCK;
 		rCmdEdgeTxPwrLimit.cBandEdgeMaxPwrOFDM20 = prRegInfo->cBandEdgeMaxPwrOFDM20;
 		rCmdEdgeTxPwrLimit.cBandEdgeMaxPwrOFDM40 = prRegInfo->cBandEdgeMaxPwrOFDM40;
+		rCmdEdgeTxPwrLimit.cBandEdgeCert = getBandEdgeCert(prAdapter);
 
 		DBGLOG(INIT, TRACE, "NVRAM 2G Bandedge CCK(%d) HT20(%d)HT40(%d)\n",
 		       rCmdEdgeTxPwrLimit.cBandEdgeMaxPwrCCK,

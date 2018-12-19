@@ -10,7 +10,7 @@
 #
 # Copyright (C) 1995-2001 by Russell King
 
-LDFLAGS_vmlinux	:=-p --no-undefined -X
+LDFLAGS_vmlinux	:=--no-undefined -X
 CPPFLAGS_vmlinux.lds = -DTEXT_OFFSET=$(TEXT_OFFSET)
 OBJCOPYFLAGS	:=-O binary -R .note -R .note.gnu.build-id -R .comment -S
 GZFLAGS		:=-9
@@ -21,6 +21,8 @@ KBUILD_DEFCONFIG := defconfig
 
 KBUILD_CFLAGS	+= -mgeneral-regs-only
 KBUILD_CFLAGS	+= -fno-pic
+KBUILD_CFLAGS	+= $(call cc-option, -mpc-relative-literal-loads)
+
 ifeq ($(CONFIG_CPU_BIG_ENDIAN), y)
 KBUILD_CPPFLAGS	+= -mbig-endian
 AS		+= -EB
@@ -32,6 +34,10 @@ LD		+= -EL
 endif
 
 CHECKFLAGS	+= -D__aarch64__
+
+ifeq ($(CONFIG_ARM64_ERRATUM_843419), y)
+KBUILD_CFLAGS_MODULE	+= -mcmodel=large
+endif
 
 # Default value
 head-y		:= arch/arm64/kernel/head.o

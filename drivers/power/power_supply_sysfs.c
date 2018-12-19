@@ -105,6 +105,10 @@ static ssize_t power_supply_show_property(struct device *dev,
 		return sprintf(buf, "%s\n", scope_text[value.intval]);
 	else if (off >= POWER_SUPPLY_PROP_MODEL_NAME)
 		return sprintf(buf, "%s\n", value.strval);
+	/*start-160326-xmyyq-fix healthd error about smb status*/
+	else if (off == POWER_SUPPLY_PROP_status_smb)
+		return sprintf(buf, "%s\n", status_text[value.intval]);
+	/*end-160326-xmyyq-fix healthd error about smb status*/
 
 	if (off == POWER_SUPPLY_PROP_CHARGE_COUNTER_EXT)
 		return sprintf(buf, "%lld\n", value.int64val);

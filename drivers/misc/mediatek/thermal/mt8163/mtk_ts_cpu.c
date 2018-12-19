@@ -1799,8 +1799,9 @@ static void read_all_bank_temperature(void)
 	mt_ptp_unlock(&flags);
 }
 
-#ifdef CONFIG_LIMIT_CPU_714MHZ_WHEN_THERMAL_UP_80C
-int cpu_temp_upto_80;
+#ifdef CONFIG_BATTERY_THERMAL_CHECK_POWER_ON
+extern int  save_thermal_status(int state);
+static int save_state_count = 0;
 #endif
 
 static int tscpu_get_temp(struct thermal_zone_device *thermal, unsigned long *t)
@@ -1906,20 +1907,23 @@ Bank2 : SOC (TS_MCU4,TS_MCU2,TS_MCU3)(TS1, TS4, TS5)
 	g_curr_temp = curr_temp;
 #endif
 
+#ifdef CONFIG_BATTERY_THERMAL_CHECK_POWER_ON
+//	printk("cpu temperature = %d\n",curr_temp);
+	if(curr_temp >= 95000){
+		if((save_state_count % 10) == 0){
+			save_thermal_status(2);
+			save_state_count = 0;
+		}
+		save_state_count++;
+	}
+#endif
+
 #if THERMAL_GPIO_OUT_TOGGLE
 	/*for output signal monitor */
 	tscpu_set_GPIO_toggle_for_monitor();
 #endif
 
 	g_max_temp = curr_temp;
-#ifdef CONFIG_LIMIT_CPU_714MHZ_WHEN_THERMAL_UP_80C
-//	printk("=====%s %d curr_temp=%d=====\n",__func__, __LINE__, curr_temp);
-	if (curr_temp > 65000)
-		cpu_temp_upto_80 = 1;
-	else
-		cpu_temp_upto_80 = 0;
-//	printk("=====%s %d cpu_temp_upto_80=%d=====\n",__func__, __LINE__, cpu_temp_upto_80);
-#endif
 
 	tscpu_dprintk("tscpu_get_temp, current temp =%d\n", curr_temp);
 	return ret;
@@ -2315,33 +2319,33 @@ static int _adaptive_power(long prev_temp, long curr_temp, unsigned int gpu_load
 			if (curr_temp < TARGET_TJ)
 				return 0;
 
-			triggered = 1;
-			switch (mtktscpu_atm) {
-			case 1:	/* FTL ATM v2 */
-			case 2:	/* CPU_GPU_Weight ATM v2 */
+				triggered = 1;
+				switch (mtktscpu_atm) {
+				case 1:	/* FTL ATM v2 */
+				case 2:	/* CPU_GPU_Weight ATM v2 */
 #if MTKTSCPU_FAST_POLLING
-					total_power =
-						FIRST_STEP_TOTAL_POWER_BUDGET -
-						((curr_temp - TARGET_TJ) * tt_ratio_high_rise +
-						 (curr_temp -
-						  prev_temp) * tp_ratio_high_rise) /
-						(PACKAGE_THETA_JA_RISE * cur_fp_factor);
+						total_power =
+							FIRST_STEP_TOTAL_POWER_BUDGET -
+							((curr_temp - TARGET_TJ) * tt_ratio_high_rise +
+							 (curr_temp -
+							  prev_temp) * tp_ratio_high_rise) /
+							(PACKAGE_THETA_JA_RISE * cur_fp_factor);
 #else
-					total_power =
-						FIRST_STEP_TOTAL_POWER_BUDGET -
-						((curr_temp - TARGET_TJ) * tt_ratio_high_rise +
-						 (curr_temp -
-						  prev_temp) * tp_ratio_high_rise) /
-						PACKAGE_THETA_JA_RISE;
+						total_power =
+							FIRST_STEP_TOTAL_POWER_BUDGET -
+							((curr_temp - TARGET_TJ) * tt_ratio_high_rise +
+							 (curr_temp -
+							  prev_temp) * tp_ratio_high_rise) /
+							PACKAGE_THETA_JA_RISE;
 #endif
-					break;
-			case 0:
-			default:	/* ATM v1 */
-					total_power = FIRST_STEP_TOTAL_POWER_BUDGET;
-			}
-			tscpu_dprintk("start %s Tp %d, Tc %d, Pt %d\n", __func__, (int)prev_temp,
+						break;
+				case 0:
+				default:	/* ATM v1 */
+						total_power = FIRST_STEP_TOTAL_POWER_BUDGET;
+				}
+				tscpu_dprintk("start %s Tp %d, Tc %d, Pt %d\n", __func__, (int)prev_temp,
 						(int)curr_temp, total_power);
-			return P_adaptive(total_power, gpu_loading);
+				return P_adaptive(total_power, gpu_loading);
 		}
 
 		/* Adjust total power budget if necessary */

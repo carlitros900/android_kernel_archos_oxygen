@@ -392,13 +392,9 @@ static struct sym827_pdata *of_get_sym827_platform_data(struct device *dev)
 	ret = of_get_named_gpio(node, "vsel-gpio", 0);
 	if (ret >= 0) {
 		pdata->gpio_vsel = ret;
-		printk("xingkun test pdata->gpio_vsel=%d, %s\n",pdata->gpio_vsel,__func__);
 		ret = gpio_request(pdata->gpio_vsel, "sym827_vsel");
 		if (ret)
 			dev_err(dev, "Failed to gpio_request %d\n", pdata->gpio_vsel);
-		gpio_direction_output(pdata->gpio_vsel, 1);
-		gpio_direction_input(pdata->gpio_vsel);
-		printk("xingkun test %s\n",__func__);
 	}
 
 	ret = of_get_named_gpio(node, "en-gpio", 0);

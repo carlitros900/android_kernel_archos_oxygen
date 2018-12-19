@@ -404,23 +404,45 @@ void vHotPlugPinInit(struct platform_device *pdev)
 	vWriteIoPadMsk(IO_PAD_EN, IO_PAD_HOT_PLUG_EN, IO_PAD_HOT_PLUG_EN);*/
 	int ret = 0;
 	struct pinctrl *pinctrl;
-	struct pinctrl_state *pins_default;
+	struct pinctrl_state *pins_hpd_default;
 
 	pinctrl = devm_pinctrl_get(&pdev->dev);
 	if (IS_ERR(pinctrl)) {
 		ret = PTR_ERR(pinctrl);
 		dev_err(&pdev->dev, "hdmi HPD pin, failure of setting\n");
-	}
-
-	pins_default = pinctrl_lookup_state(pinctrl, "hdmi_hpd");
-	if (IS_ERR(pins_default)) {
-		ret = PTR_ERR(pins_default);
-		dev_err(&pdev->dev, "cannot find hdmi HPD pinctrl default");
 	} else {
-		pinctrl_select_state(pinctrl, pins_default);
+		pins_hpd_default = pinctrl_lookup_state(pinctrl, "hdmi_hpd");
+		if (IS_ERR(pins_hpd_default)) {
+			ret = PTR_ERR(pins_hpd_default);
+			dev_err(&pdev->dev, "cannot find hdmi HPD pinctrl default");
+		} else {
+			pinctrl_select_state(pinctrl, pins_hpd_default);
+		}
 	}
 }
 
+void vDdcPinInit(struct platform_device *pdev)
+{
+	int ret = 0;
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *pins_ddc_default;
+
+	HDMI_DRV_LOG("[hdmi] vDdcPinInit in\n");
+	pinctrl = devm_pinctrl_get(&pdev->dev);
+	if (IS_ERR(pinctrl)) {
+		ret = PTR_ERR(pinctrl);
+		dev_err(&pdev->dev, "hdmi DDC pin, failure of setting\n");
+	} else {
+		pins_ddc_default = pinctrl_lookup_state(pinctrl, "hdmi_ddc");
+		if (IS_ERR(pins_ddc_default)) {
+			ret = PTR_ERR(pins_ddc_default);
+			dev_err(&pdev->dev, "cannot find hdmi DDC pinctrl default");
+		} else {
+			HDMI_DRV_LOG("[hdmi] vDdcPinInit done\n");
+			pinctrl_select_state(pinctrl, pins_ddc_default);
+		}
+	}
+}
 
 unsigned char fgIsAcpEnable(void)
 {
@@ -744,7 +766,7 @@ void vSetHDMITxPLL(unsigned char bResIndex, unsigned char bdeepmode)
 		vWriteIoPllMsk(HDMI_CON0, (0x0 << RG_HDMITX_EN_IMP), RG_HDMITX_EN_IMP_MASK);
 		vWriteIoPllMsk(HDMI_CON1, (v4value1 << RG_HDMITX_DRV_IMP), RG_HDMITX_DRV_IMP_MASK);
 		vWriteIoPllMsk(HDMI_CON4, v4value2, RG_HDMITX_RESERVE_MASK);
-		vWriteIoPllMsk(HDMI_CON0, (0xa << RG_HDMITX_DRV_IBIAS), RG_HDMITX_DRV_IBIAS_MASK);
+		vWriteIoPllMsk(HDMI_CON0, (0x9 << RG_HDMITX_DRV_IBIAS), RG_HDMITX_DRV_IBIAS_MASK);//0xa. xmyyq-2016.11.07-modify hdmi tx driver
 	}
 
 	/* power on sequence of hdmi */
@@ -798,6 +820,7 @@ void vConfigHdmiSYS(unsigned char bResIndex)
 	/*Clear The TVDPLL Div argument,0:26M */
 	vWriteHdmiTOPCKMsk(CLK_CFG_7, 0, CLK_DPI1_SEL);
 #endif
+
 #endif
 	/*Clear The clk_hdmi_sel  */
 	vWriteHdmiTOPCKMsk(CLK_CFG_8, 0, CLK_HDMI_SEL);

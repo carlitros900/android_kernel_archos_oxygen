@@ -34,27 +34,9 @@
 void
 cifs_dump_mem(char *label, void *data, int length)
 {
-	int i, j;
-	int *intptr = data;
-	char *charptr = data;
-	char buf[10], line[80];
-
-	printk(KERN_DEBUG "%s: dump of %d bytes of data at 0x%p\n",
-		label, length, data);
-	for (i = 0; i < length; i += 16) {
-		line[0] = 0;
-		for (j = 0; (j < 4) && (i + j * 4 < length); j++) {
-			sprintf(buf, " %08x", intptr[i / 4 + j]);
-			strcat(line, buf);
-		}
-		buf[0] = ' ';
-		buf[2] = 0;
-		for (j = 0; (j < 16) && (i + j < length); j++) {
-			buf[1] = isprint(charptr[i + j]) ? charptr[i + j] : '.';
-			strcat(line, buf);
-		}
-		printk(KERN_DEBUG "%s\n", line);
-	}
+	pr_debug("%s: dump of %d bytes of data at 0x%p\n", label, length, data);
+	print_hex_dump(KERN_DEBUG, "", DUMP_PREFIX_OFFSET, 16, 4,
+		       data, length, true);
 }
 
 #ifdef CONFIG_CIFS_DEBUG
@@ -68,7 +50,7 @@ void cifs_vfs_err(const char *fmt, ...)
 	vaf.fmt = fmt;
 	vaf.va = &args;
 
-	printk(KERN_ERR "CIFS VFS: %pV", &vaf);
+	pr_err_ratelimited("CIFS VFS: %pV", &vaf);
 
 	va_end(args);
 }
@@ -289,6 +271,13 @@ static ssize_t cifs_stats_proc_write(struct file *file,
 		atomic_set(&totBufAllocCount, 0);
 		atomic_set(&totSmBufAllocCount, 0);
 #endif /* CONFIG_CIFS_STATS2 */
+		atomic_set(&tcpSesReconnectCount, 0);
+		atomic_set(&tconInfoReconnectCount, 0);
+
+		spin_lock(&GlobalMid_Lock);
+		GlobalMaxActiveXid = 0;
+		GlobalCurrentXid = 0;
+		spin_unlock(&GlobalMid_Lock);
 		spin_lock(&cifs_tcp_ses_lock);
 		list_for_each(tmp1, &cifs_tcp_ses_list) {
 			server = list_entry(tmp1, struct TCP_Server_Info,
@@ -301,6 +290,10 @@ static ssize_t cifs_stats_proc_write(struct file *file,
 							  struct cifs_tcon,
 							  tcon_list);
 					atomic_set(&tcon->num_smbs_sent, 0);
+					spin_lock(&tcon->stat_lock);
+					tcon->bytes_read = 0;
+					tcon->bytes_written = 0;
+					spin_unlock(&tcon->stat_lock);
 					if (server->ops->clear_stats)
 						server->ops->clear_stats(tcon);
 				}

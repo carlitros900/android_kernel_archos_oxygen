@@ -56,9 +56,7 @@ static struct dentry *debugDir;
 
 static struct dentry *debugfs_dump;
 
-/*
 static const long int DEFAULT_LOG_FPS_WND_SIZE = 30;
-*/
 static int debug_init;
 
 
@@ -127,13 +125,13 @@ static unsigned int is_reg_addr_valid(unsigned int isVa, unsigned long addr)
 		if ((isVa == 1) && (addr >= dispsys_reg[i]) && (addr <= dispsys_reg[i] + 0x1000))
 			break;
 		if ((isVa == 0) && (addr >= ddp_reg_pa_base[i])
-			&& (addr <= ddp_reg_pa_base[i] + 0x1000))
+		    && (addr <= ddp_reg_pa_base[i] + 0x1000))
 			break;
 	}
 
 	if (i < DISP_REG_NUM) {
 		DDPMSG("addr valid, isVa=0x%x, addr=0x%lx, module=%s!\n", isVa, addr,
-			   ddp_get_reg_module_name(i));
+		       ddp_get_reg_module_name(i));
 		return 1;
 	}
 	DDPERR("is_reg_addr_valid return fail, isVa=0x%x, addr=0x%lx!\n", isVa, addr);
@@ -249,7 +247,7 @@ static void process_dbg_opt(const char *opt)
 
 		ddp_init_met_tag(met_on, rdma0_mode, rdma1_mode);
 		DDPMSG("process_dbg_opt, met_on=%d,rdma0_mode %d, rdma1 %d\n", met_on, rdma0_mode,
-			   rdma1_mode);
+		       rdma1_mode);
 		sprintf(buf, "met_on:%d,rdma0_mode:%d,rdma1_mode:%d\n", met_on, rdma0_mode,
 			rdma1_mode);
 	} else if (0 == strncmp(opt, "backlight:", 10)) {
@@ -393,8 +391,8 @@ static void process_dbg_opt(const char *opt)
 			DDPDUMP("clock_mm setting:%u\n", DISP_REG_GET(DISP_REG_CONFIG_C11));
 			if ((DISP_REG_GET(DISP_REG_CONFIG_C11) & 0xff000000) != 0xff000000)
 				DDPDUMP
-					("error, MM clock bit 24~bit31 should be 1, but real value=0x%x",
-					 DISP_REG_GET(DISP_REG_CONFIG_C11));
+				    ("error, MM clock bit 24~bit31 should be 1, but real value=0x%x",
+				     DISP_REG_GET(DISP_REG_CONFIG_C11));
 		} else if (enable == 9) {
 			gOVLBackground = 0xFF0000FF;
 			pr_debug("DDP: gOVLBackground=%d\n", gOVLBackground);
@@ -469,7 +467,7 @@ static void process_dbg_opt(const char *opt)
 				disp_low_power_enlarge_blanking = 0;
 
 			pr_debug("DDP: disp_low_power_enlarge_blanking=%d\n",
-				   disp_low_power_enlarge_blanking);
+			       disp_low_power_enlarge_blanking);
 			sprintf(buf, "disp_low_power_enlarge_blanking: %d\n",
 				disp_low_power_enlarge_blanking);
 
@@ -480,7 +478,7 @@ static void process_dbg_opt(const char *opt)
 				disp_low_power_disable_ddp_clock = 0;
 
 			pr_debug("DDP: disp_low_power_disable_ddp_clock=%d\n",
-				   disp_low_power_disable_ddp_clock);
+			       disp_low_power_disable_ddp_clock);
 			sprintf(buf, "disp_low_power_disable_ddp_clock: %d\n",
 				disp_low_power_disable_ddp_clock);
 
@@ -491,7 +489,7 @@ static void process_dbg_opt(const char *opt)
 				disp_low_power_disable_fence_thread = 0;
 
 			pr_debug("DDP: disp_low_power_disable_fence_thread=%d\n",
-				   disp_low_power_disable_fence_thread);
+			       disp_low_power_disable_fence_thread);
 			sprintf(buf, "disp_low_power_disable_fence_thread: %d\n",
 				disp_low_power_disable_fence_thread);
 
@@ -599,7 +597,6 @@ static void process_dbg_opt(const char *opt)
 			pr_err("force_sec: %d\n", force_sec);
 			sprintf(buf, "force_sec: %d\n", force_sec);
 		}
-
 	} else if (0 == strncmp(opt, "mmp", 3)) {
 		init_ddp_mmp_events();
 	} else {
@@ -684,7 +681,7 @@ static ssize_t debug_dump_read(struct file *file, char __user *buf, size_t size,
 	dpmgr_debug_path_status(-1);
 	dump_to_buffer = 0;
 	return simple_read_from_buffer(buf, size, ppos, dprec_logger_get_dump_addr(),
-					   dprec_logger_get_dump_len());
+				       dprec_logger_get_dump_len());
 }
 
 
@@ -697,7 +694,7 @@ void ddp_debug_init(void)
 	if (!debug_init) {
 		debug_init = 1;
 		debugfs = debugfs_create_file("dispsys",
-						  S_IFREG | S_IRUGO, NULL, (void *)0, &debug_fops);
+					      S_IFREG | S_IRUGO, NULL, (void *)0, &debug_fops);
 
 
 		debugDir = debugfs_create_dir("disp", NULL);

@@ -1220,20 +1220,23 @@ static int ovl_config_l(DISP_MODULE_ENUM module, disp_ddp_path_config *pConfig, 
 			assert_pa(maybe 0 after suspend) */
 			if (module == DISP_MODULE_OVL0 &&
 				i == (layer_max - 1) &&
-				isAEEEnabled && pConfig->ovl_config[i].addr != get_Assert_Layer_PA() &&
-				(DISP_REG_GET(DISP_REG_OVL_L3_ADDR) != 0) &&
-				((DISP_REG_GET(DISP_REG_OVL_SRC_CON) & 0x8) != 0)) {
-				DDPMSG
-					("O - assert layer skip. O%d/L%d/LMax%d/mva0x%lx,reg_addr=0x%x\n",
-					module, i, layer_max, pConfig->ovl_config[i].addr,
-					DISP_REG_GET(DISP_REG_OVL_L3_ADDR));
+				isAEEEnabled && pConfig->ovl_config[i].addr != get_Assert_Layer_PA()) {
+				if ((DISP_REG_GET(DISP_REG_OVL_L3_ADDR) != 0) &&
+					(DISP_REG_GET(DISP_REG_OVL_SRC_CON) & 0x8) != 0) {
+					DDPMSG
+						("O - assert layer skip. O%d/L%d/LMax%d/mva0x%lx,reg_addr=0x%x\n",
+						module, i, layer_max, pConfig->ovl_config[i].addr,
+						DISP_REG_GET(DISP_REG_OVL_L3_ADDR));
 
-				if (pConfig->ovl_config[i].addr != 0 ) {
-					ovl_layer_switch(module, i % 4, pConfig->ovl_config[i].layer_en,
-					handle);
-					layer_enable |= (1 << (i % 4));
+					if (pConfig->ovl_config[i].addr != 0 ) {
+						ovl_layer_switch(module, i % 4, pConfig->ovl_config[i].layer_en,
+						handle);
+						layer_enable |= (1 << (i % 4));
+					}
+					continue;
 				}
-				continue;
+				DDPMSG("disable this layer, layer: %d\n", pConfig->ovl_config[i].layer);
+				pConfig->ovl_config[i].layer_en = 0;
 			}
 
 			if (module == DISP_MODULE_OVL0 && DISP_REG_GET(DISP_REG_OVL_EN) == 0) {

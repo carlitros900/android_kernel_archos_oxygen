@@ -56,7 +56,7 @@
 #include "musbfsh_mt65xx.h"
 #endif
 
-extern void musbfsh_h_pre_disable(struct musbfsh *musbfsh);
+
 #ifdef CONFIG_MTK_ICUSB_SUPPORT
 struct my_attr resistor_control_attr = {
 	.attr.name = "resistor_control",
@@ -109,6 +109,7 @@ static void musbfsh_port_suspend(struct musbfsh *musbfsh, bool do_suspend)
 		/* clean MUSBFSH_INTR_SOF in MUSBFSH_INTRUSBE */
 		intrusbe = musbfsh_readb(mbase, MUSBFSH_INTRUSBE);
 		intrusbe &= ~MUSBFSH_INTR_SOF;
+		intrusbe &= ~MUSBFSH_INTR_BABBLE;
 		musbfsh_writeb(mbase, MUSBFSH_INTRUSBE, intrusbe);
 		mb(); /* flush POWER and PHY setting immediately */
 		/* clean MUSBFSH_INTR_SOF in MUSBFSH_INTRUSB */
@@ -416,10 +417,6 @@ void musbfsh_root_disconnect(struct musbfsh *musbfsh)
 
 	usb_hcd_poll_rh_status(musbfsh_to_hcd(musbfsh));
 	musbfsh->is_active = 0;
-
-    spin_unlock(&musbfsh->lock);
-	musbfsh_h_pre_disable(musbfsh);
-	spin_lock(&musbfsh->lock);
 }
 
 

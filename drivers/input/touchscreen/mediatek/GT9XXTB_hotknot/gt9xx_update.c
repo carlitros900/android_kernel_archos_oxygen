@@ -141,8 +141,9 @@ u8 load_fw_process = 0;
 
 static u8 gup_burn_fw_app_section(struct i2c_client *client, u8 *fw_section, u16 start_addr,
 				  u32 len, u8 bank_cmd);
+#if defined(CONFIG_GTP_COMPATIBLE_MODE)
 static u8 gup_check_and_repair(struct i2c_client *, s32, u8 *, u32);
-
+#endif
 static s32 gup_i2c_read(struct i2c_client *client, u8 *buf, s32 len)
 {
 	s32 ret = -1;
@@ -297,7 +298,7 @@ s32 gup_enter_update_mode(struct i2c_client *client)
 	msleep(20);
 
 	/* step2:select I2C slave addr,INT:0--0xBA;1--0x28. */
-	gpio_direction_output(tpd_rst_gpio_number, 1);
+	gtp_eint_gpio_output(tpd_int_gpio_number, (client->addr == 0x14));
 	msleep(20);
 
 	/* step3:RST output high reset guitar */
@@ -2078,7 +2079,7 @@ file_fail:
 		tpd_irq_registration();
 #endif
 	/* mt_eint_unmask(CUST_EINT_TOUCH_PANEL_NUM); */
-	if(false == tpdIrqIsEnabled) {
+	if((false == tpdIrqIsEnabled) && (1 == tpdGPIOTiedtoIRQ)) {
 		enable_irq(touch_irq);
 		tpdIrqIsEnabled = true;
 	}
@@ -2752,7 +2753,7 @@ s32 gup_fw_download_proc(void *dir, u8 dwn_mode)
 		tpd_irq_registration();
 #endif
 	/* mt_eint_unmask(CUST_EINT_TOUCH_PANEL_NUM); */
-	if(false == tpdIrqIsEnabled) {
+	if((false == tpdIrqIsEnabled) && (1 == tpdGPIOTiedtoIRQ)) {
 		enable_irq(touch_irq);
 		tpdIrqIsEnabled = true;
 	}
@@ -2773,7 +2774,7 @@ file_fail:
 	if(0 == tpdGPIOTiedtoIRQ)
 		tpd_irq_registration();
 #endif
-	if(false == tpdIrqIsEnabled) {
+	if((false == tpdIrqIsEnabled) && (1 == tpdGPIOTiedtoIRQ)) {
 		enable_irq(touch_irq);
 		tpdIrqIsEnabled = true;
 	}
@@ -3111,6 +3112,8 @@ u8 gup_clk_calibration(void)
 #endif
 #ifdef CONFIG_GTP_USE_GPIO_BUT_NOT_PINCTRL
 	gpio_direction_input(tpd_int_gpio_number);
+	if(0 == tpdGPIOTiedtoIRQ)
+		tpd_irq_registration();
 #else
 	tpd_gpio_as_int(GTP_INT_PORT);
 #endif
@@ -3308,7 +3311,7 @@ gup_load_system_exit:
 		tpd_irq_registration();
 #endif
 	/* mt_eint_unmask(CUST_EINT_TOUCH_PANEL_NUM); */
-	if(false == tpdIrqIsEnabled) {
+	if((false == tpdIrqIsEnabled) && (1 == tpdGPIOTiedtoIRQ)) {
 		enable_irq(touch_irq);
 		tpdIrqIsEnabled = true;
 	}
@@ -3440,7 +3443,6 @@ s32 gup_load_hotknot_system(void)
 	ret = gup_load_system(&firmware[FIRMWARE_HEADER_LEN], length, 0);
 
 load_hotknot_exit:
-
 	if (is_load_from_file)
 		kfree(firmware);
 
@@ -3469,7 +3471,7 @@ s32 gup_recovery_main_system(void)
 #ifdef CONFIG_GTP_USE_GPIO_BUT_NOT_PINCTRL
 		if(0 == tpdGPIOTiedtoIRQ)
 			tpd_irq_registration();
-		if(false == tpdIrqIsEnabled) {
+		if((false == tpdIrqIsEnabled) && (1 == tpdGPIOTiedtoIRQ)) {
 			enable_irq(touch_irq);
 			tpdIrqIsEnabled = true;
 		}

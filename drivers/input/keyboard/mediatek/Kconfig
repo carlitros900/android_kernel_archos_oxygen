@@ -8,6 +8,10 @@ config KEYBOARD_MTK
 	  To compile this driver as a module, choose M here: the
 	  module will be called mtk-kpd.
 
+config CUSTOM_KERNEL_KPD_MHALL
+	bool "support mhall function"
+	default n
+
 config KEYBOARD_HID
 	tristate "MediaTek hid keyboard support"
 	---help---

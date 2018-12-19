@@ -539,9 +539,10 @@ VOID nicTxInitialize(IN P_ADAPTER_T prAdapter)
 */
 /*----------------------------------------------------------------------------*/
 UINT_32 u4CurrTick = 0;
-WLAN_STATUS nicTxAcquireResource(IN P_ADAPTER_T prAdapter, IN UINT_8 ucTC)
+WLAN_STATUS nicTxAcquireResource(IN P_ADAPTER_T prAdapter, IN UINT_8 ucTC, IN BOOLEAN pfgIsSecOrMgmt)
 {
 #define TC4_NO_RESOURCE_DELAY_MS      5    /* exponential of 5s */
+#define TC4_NO_RESOURCE_DELAY_1S      1    /* exponential of 1s */
 
 	P_TX_CTRL_T prTxCtrl;
 	WLAN_STATUS u4Status = WLAN_STATUS_RESOURCES;
@@ -558,26 +559,44 @@ WLAN_STATUS nicTxAcquireResource(IN P_ADAPTER_T prAdapter, IN UINT_8 ucTC)
 
 /*	DbgPrint("nicTxAcquireResource prTxCtrl->rTc.aucFreeBufferCount[%d]=%d\n",
 	ucTC, prTxCtrl->rTc.aucFreeBufferCount[ucTC]); */
+	do {
+		if (pfgIsSecOrMgmt && (ucTC == TC4_INDEX)) {
+			if (prTxCtrl->rTc.aucFreeBufferCount[ucTC] < 2) {
+				DBGLOG(TX, EVENT, "<wlan> aucFreeBufferCount = %d\n",
+				prTxCtrl->rTc.aucFreeBufferCount[ucTC]);
 
-	if (prTxCtrl->rTc.aucFreeBufferCount[ucTC]) {
+				if (prTxCtrl->rTc.aucFreeBufferCount[ucTC])
+					u4CurrTick = 0;
 
-		if (ucTC == TC4_INDEX)
-			u4CurrTick = 0;
-		/* get a available TX entry */
-		prTxCtrl->rTc.aucFreeBufferCount[ucTC]--;
+				break;
+			}
+		}
 
-		prQM->au4ResourceUsedCounter[ucTC]++;
+		if (prTxCtrl->rTc.aucFreeBufferCount[ucTC]) {
 
-		DBGLOG(TX, EVENT, "Acquire: TC = %d aucFreeBufferCount = %d\n",
-				   ucTC, prTxCtrl->rTc.aucFreeBufferCount[ucTC]);
+			if (ucTC == TC4_INDEX)
+				u4CurrTick = 0;
+			/* get a available TX entry */
+			prTxCtrl->rTc.aucFreeBufferCount[ucTC]--;
 
-		u4Status = WLAN_STATUS_SUCCESS;
-	}
+			prQM->au4ResourceUsedCounter[ucTC]++;
+
+			DBGLOG(TX, EVENT, "Acquire: TC = %d aucFreeBufferCount = %d\n",
+					   ucTC, prTxCtrl->rTc.aucFreeBufferCount[ucTC]);
+
+			u4Status = WLAN_STATUS_SUCCESS;
+		}
+	} while (FALSE);
 	KAL_RELEASE_SPIN_LOCK(prAdapter, SPIN_LOCK_TX_RESOURCE);
 
 	if (ucTC == TC4_INDEX) {
 		if (u4CurrTick == 0)
 			u4CurrTick = kalGetTimeTick();
+
+		if (CHECK_FOR_TIMEOUT(kalGetTimeTick(), u4CurrTick,
+				SEC_TO_SYSTIME(TC4_NO_RESOURCE_DELAY_1S)))
+			wlanDumpCommandFwStatus();
+
 		if (CHECK_FOR_TIMEOUT(kalGetTimeTick(), u4CurrTick,
 				SEC_TO_SYSTIME(TC4_NO_RESOURCE_DELAY_MS))) {
 			wlanDumpTcResAndTxedCmd(NULL, 0);
@@ -585,6 +604,7 @@ WLAN_STATUS nicTxAcquireResource(IN P_ADAPTER_T prAdapter, IN UINT_8 ucTC)
 			glDumpConnSysCpuInfo(prAdapter->prGlueInfo);
 			kalSendAeeWarning("[TC4 no resource delay 5s!]", __func__);
 			glDoChipReset();
+			u4CurrTick = 0;
 		}
 	}
 	return u4Status;
@@ -806,6 +826,7 @@ WLAN_STATUS nicTxMsduInfoList(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduI
 	P_MSDU_INFO_T prMsduInfo, prNextMsduInfo;
 	QUE_T qDataPort0, qDataPort1;
 	WLAN_STATUS status;
+	BOOLEAN pfgIsSecOrMgmt = FALSE;
 
 	ASSERT(prAdapter);
 	ASSERT(prMsduInfoListHead);
@@ -839,7 +860,7 @@ WLAN_STATUS nicTxMsduInfoList(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduI
 		case TC5_INDEX:	/* Broadcast/multicast data packets */
 			QUEUE_GET_NEXT_ENTRY((P_QUE_ENTRY_T) prMsduInfo) = NULL;
 			QUEUE_INSERT_TAIL(&qDataPort0, (P_QUE_ENTRY_T) prMsduInfo);
-			status = nicTxAcquireResource(prAdapter, prMsduInfo->ucTC);
+			status = nicTxAcquireResource(prAdapter, prMsduInfo->ucTC, FALSE);
 			ASSERT(status == WLAN_STATUS_SUCCESS)
 
 			    break;
@@ -848,7 +869,11 @@ WLAN_STATUS nicTxMsduInfoList(IN P_ADAPTER_T prAdapter, IN P_MSDU_INFO_T prMsduI
 			QUEUE_GET_NEXT_ENTRY((P_QUE_ENTRY_T) prMsduInfo) = NULL;
 			QUEUE_INSERT_TAIL(&qDataPort1, (P_QUE_ENTRY_T) prMsduInfo);
 
-			status = nicTxAcquireResource(prAdapter, prMsduInfo->ucTC);
+			if ((prMsduInfo->fgIs802_1x == TRUE) ||
+				(prMsduInfo->fgIs802_11 == TRUE))
+				pfgIsSecOrMgmt = TRUE;
+
+			status = nicTxAcquireResource(prAdapter, prMsduInfo->ucTC, pfgIsSecOrMgmt);
 			ASSERT(status == WLAN_STATUS_SUCCESS)
 
 			    break;
@@ -1605,7 +1630,7 @@ WLAN_STATUS nicTxCmd(IN P_ADAPTER_T prAdapter, IN P_CMD_INFO_T prCmdInfo, IN UIN
 		/* Broadcast/multicast data frames, 1x frames, command packets, MMPDU */
 		ucPortIdx = 1;
 	}
-	wlanTraceTxCmd(prCmdInfo);
+	wlanTraceTxCmd(prAdapter, prCmdInfo);
 
 	if (prCmdInfo->eCmdType == COMMAND_TYPE_SECURITY_FRAME) {
 		/* <2> Compose HIF_TX_HEADER */

@@ -236,6 +236,9 @@ int hdmi_internal_video_config(HDMI_VIDEO_RESOLUTION vformat, enum HDMI_VIDEO_IN
 
 void hdmi_poll_isr(unsigned long n);
 void cec_poll_isr(unsigned long n);
+void HDMI_DisableIrq(void);
+void HDMI_EnableIrq(void);
+
 extern unsigned int hdmi_irq;
 extern void mt_irq_set_sens(unsigned int irq, unsigned int sens);
 extern void mt_irq_set_polarity(unsigned int irq, unsigned int polarity);

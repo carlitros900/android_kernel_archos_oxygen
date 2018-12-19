@@ -71,7 +71,9 @@ struct musbfsh_qh {
 	u8 addr_reg;		/* device address register */
 	u8 h_addr_reg;		/* hub address register */
 	u8 h_port_reg;		/* hub port register */
-
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	u8			is_in;
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 	u8 is_ready;		/* safe to modify hw_ep */
 	u8 type;		/* XFERTYPE_* */
 	u8 epnum;

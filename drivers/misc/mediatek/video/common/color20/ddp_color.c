@@ -1016,9 +1016,9 @@ void DpEngine_COLORonInit(DISP_MODULE_ENUM module, void *__cmdq)
 		_color_reg_set(cmdq, DISP_COLOR_START + offset, 0x00000001);	/* color start */
 	} else {
 		_color_reg_set_field(cmdq, CFG_MAIN_FLD_COLOR_DBUF_EN, DISP_COLOR_CFG_MAIN + offset,
-					 0x1);
+				     0x1);
 		_color_reg_set_field(cmdq, START_FLD_DISP_COLOR_START, DISP_COLOR_START + offset,
-					 0x1);
+				     0x1);
 	}
 
 #ifndef CONFIG_FPGA_EARLY_PORTING
@@ -1060,14 +1060,14 @@ void DpEngine_COLORonConfig(DISP_MODULE_ENUM module, void *__cmdq)
 	}
 
 	if (pq_param_p->u4SatGain >= COLOR_TUNING_INDEX ||
-		pq_param_p->u4HueAdj[PURP_TONE] >= COLOR_TUNING_INDEX ||
-		pq_param_p->u4HueAdj[SKIN_TONE] >= COLOR_TUNING_INDEX ||
-		pq_param_p->u4HueAdj[GRASS_TONE] >= COLOR_TUNING_INDEX ||
-		pq_param_p->u4HueAdj[SKY_TONE] >= COLOR_TUNING_INDEX ||
-		pq_param_p->u4SatAdj[PURP_TONE] >= COLOR_TUNING_INDEX ||
-		pq_param_p->u4SatAdj[SKIN_TONE] >= COLOR_TUNING_INDEX ||
-		pq_param_p->u4SatAdj[GRASS_TONE] >= COLOR_TUNING_INDEX ||
-		pq_param_p->u4SatAdj[SKY_TONE] >= COLOR_TUNING_INDEX) {
+	    pq_param_p->u4HueAdj[PURP_TONE] >= COLOR_TUNING_INDEX ||
+	    pq_param_p->u4HueAdj[SKIN_TONE] >= COLOR_TUNING_INDEX ||
+	    pq_param_p->u4HueAdj[GRASS_TONE] >= COLOR_TUNING_INDEX ||
+	    pq_param_p->u4HueAdj[SKY_TONE] >= COLOR_TUNING_INDEX ||
+	    pq_param_p->u4SatAdj[PURP_TONE] >= COLOR_TUNING_INDEX ||
+	    pq_param_p->u4SatAdj[SKIN_TONE] >= COLOR_TUNING_INDEX ||
+	    pq_param_p->u4SatAdj[GRASS_TONE] >= COLOR_TUNING_INDEX ||
+	    pq_param_p->u4SatAdj[SKY_TONE] >= COLOR_TUNING_INDEX) {
 		COLOR_ERR("[PQ][COLOR] Tuning index range error !\n");
 		return;
 	}
@@ -1095,16 +1095,16 @@ void DpEngine_COLORonConfig(DISP_MODULE_ENUM module, void *__cmdq)
 
 	/* config parameter from customer color_index.h */
 	_color_reg_set(cmdq, DISP_COLOR_G_PIC_ADJ_MAIN_1,
-			   (g_Color_Index.BRIGHTNESS[pq_param_p->u4Brightness] << 16) | g_Color_Index.
-			   CONTRAST[pq_param_p->u4Contrast]);
+		       (g_Color_Index.BRIGHTNESS[pq_param_p->u4Brightness] << 16) | g_Color_Index.
+		       CONTRAST[pq_param_p->u4Contrast]);
 	_color_reg_set(cmdq, DISP_COLOR_G_PIC_ADJ_MAIN_2,
-			   (0x200 << 16) | g_Color_Index.GLOBAL_SAT[pq_param_p->u4SatGain]);
+		       (0x200 << 16) | g_Color_Index.GLOBAL_SAT[pq_param_p->u4SatGain]);
 
 
 	/* Partial Y Function */
 	for (index = 0; index < 8; index++) {
 		_color_reg_set(cmdq, DISP_COLOR_Y_SLOPE_1_0_MAIN + 4 * index,
-				   (g_Color_Index.PARTIAL_Y[pq_param_p->u4PartialY][2 * index] | g_Color_Index.
+			       (g_Color_Index.PARTIAL_Y[pq_param_p->u4PartialY][2 * index] | g_Color_Index.
 				PARTIAL_Y[pq_param_p->u4PartialY][2 * index + 1] << 16));
 	}
 
@@ -1112,160 +1112,160 @@ void DpEngine_COLORonConfig(DISP_MODULE_ENUM module, void *__cmdq)
 	/* Partial Saturation Function */
 
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN1_0 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SG1][0] | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SG1][1] << 8 | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SG1][2] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG1][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN1_1 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG1][1] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG1][2] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG1][3] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG1][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN1_2 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG1][5] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG1][6] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG1][7] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG1][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN1_3 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG1][1] | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG1][2] << 8 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->
-					 u4SatAdj[GRASS_TONE]][SG1][3] << 16 | g_Color_Index.
+				     u4SatAdj[GRASS_TONE]][SG1][3] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG1][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN1_4 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG1][5] | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SG1][0] << 8 | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SG1][1] << 16 | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SG1][2] << 24));
 
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN2_0 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SG2][0] | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SG2][1] << 8 | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SG2][2] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG2][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN2_1 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG2][1] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG2][2] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG2][3] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG2][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN2_2 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG2][5] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG2][6] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG2][7] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG2][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN2_3 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG2][1] | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG2][2] << 8 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->
-					 u4SatAdj[GRASS_TONE]][SG2][3] << 16 | g_Color_Index.
+				     u4SatAdj[GRASS_TONE]][SG2][3] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG2][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN2_4 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG2][5] | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SG2][0] << 8 | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SG2][1] << 16 | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SG2][2] << 24));
 
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN3_0 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SG3][0] | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SG3][1] << 8 | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SG3][2] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG3][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN3_1 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG3][1] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG3][2] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG3][3] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG3][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN3_2 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG3][5] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG3][6] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SG3][7] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG3][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN3_3 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG3][1] | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG3][2] << 8 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->
-					 u4SatAdj[GRASS_TONE]][SG3][3] << 16 | g_Color_Index.
+				     u4SatAdj[GRASS_TONE]][SG3][3] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG3][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_GAIN3_4 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SG3][5] | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SG3][0] << 8 | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SG3][1] << 16 | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SG3][2] << 24));
 
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT1_0 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SP1][0] | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SP1][1] << 8 | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SP1][2] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP1][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT1_1 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP1][1] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP1][2] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP1][3] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP1][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT1_2 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP1][5] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP1][6] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP1][7] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP1][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT1_3 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP1][1] | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP1][2] << 8 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->
-					 u4SatAdj[GRASS_TONE]][SP1][3] << 16 | g_Color_Index.
+				     u4SatAdj[GRASS_TONE]][SP1][3] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP1][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT1_4 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP1][5] | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SP1][0] << 8 | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SP1][1] << 16 | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SP1][2] << 24));
 
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT2_0 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SP2][0] | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SP2][1] << 8 | g_Color_Index.
 			PURP_TONE_S[pq_param_p->u4SatAdj[PURP_TONE]][SP2][2] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP2][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT2_1 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP2][1] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP2][2] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP2][3] << 16 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP2][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT2_2 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP2][5] | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP2][6] << 8 | g_Color_Index.
 			SKIN_TONE_S[pq_param_p->u4SatAdj[SKIN_TONE]][SP2][7] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP2][0] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT2_3 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP2][1] | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP2][2] << 8 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->
-					 u4SatAdj[GRASS_TONE]][SP2][3] << 16 | g_Color_Index.
+				     u4SatAdj[GRASS_TONE]][SP2][3] << 16 | g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP2][4] << 24));
 	_color_reg_set(cmdq, DISP_COLOR_PART_SAT_POINT2_4 + offset,
-			   (g_Color_Index.
+		       (g_Color_Index.
 			GRASS_TONE_S[pq_param_p->u4SatAdj[GRASS_TONE]][SP2][5] | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SP2][0] << 8 | g_Color_Index.
 			SKY_TONE_S[pq_param_p->u4SatAdj[SKY_TONE]][SP2][1] << 16 | g_Color_Index.
@@ -1273,28 +1273,28 @@ void DpEngine_COLORonConfig(DISP_MODULE_ENUM module, void *__cmdq)
 
 	for (index = 0; index < 3; index++) {
 		h_series[index + PURP_TONE_START] =
-			g_Color_Index.PURP_TONE_H[pq_param_p->u4HueAdj[PURP_TONE]][index];
+		    g_Color_Index.PURP_TONE_H[pq_param_p->u4HueAdj[PURP_TONE]][index];
 	}
 
 	for (index = 0; index < 8; index++) {
 		h_series[index + SKIN_TONE_START] =
-			g_Color_Index.SKIN_TONE_H[pq_param_p->u4HueAdj[SKIN_TONE]][index];
+		    g_Color_Index.SKIN_TONE_H[pq_param_p->u4HueAdj[SKIN_TONE]][index];
 	}
 
 	for (index = 0; index < 6; index++) {
 		h_series[index + GRASS_TONE_START] =
-			g_Color_Index.GRASS_TONE_H[pq_param_p->u4HueAdj[GRASS_TONE]][index];
+		    g_Color_Index.GRASS_TONE_H[pq_param_p->u4HueAdj[GRASS_TONE]][index];
 	}
 
 	for (index = 0; index < 3; index++) {
 		h_series[index + SKY_TONE_START] =
-			g_Color_Index.SKY_TONE_H[pq_param_p->u4HueAdj[SKY_TONE]][index];
+		    g_Color_Index.SKY_TONE_H[pq_param_p->u4HueAdj[SKY_TONE]][index];
 	}
 
 	for (index = 0; index < 5; index++) {
 		u4Temp = (h_series[4 * index]) +
-			(h_series[4 * index + 1] << 8) +
-			(h_series[4 * index + 2] << 16) + (h_series[4 * index + 3] << 24);
+		    (h_series[4 * index + 1] << 8) +
+		    (h_series[4 * index + 2] << 16) + (h_series[4 * index + 3] << 24);
 		_color_reg_set(cmdq, DISP_COLOR_LOCAL_HUE_CD_0 + offset + 4 * index, u4Temp);
 	}
 
@@ -1525,9 +1525,9 @@ static void color_write_hw_reg(DISP_MODULE_ENUM module,
 
 	for (index = 0; index < 5; index++) {
 		u4Temp = (h_series[4 * index]) |
-			(h_series[4 * index + 1] << 8) |
-			(h_series[4 * index + 2] << 16) |
-			(h_series[4 * index + 3] << 24);
+		    (h_series[4 * index + 1] << 8) |
+		    (h_series[4 * index + 2] << 16) |
+		    (h_series[4 * index + 3] << 24);
 		_color_reg_set(cmdq, DISP_COLOR_LOCAL_HUE_CD_0 + offset + 4 * index, u4Temp);
 	}
 
@@ -1701,15 +1701,9 @@ static unsigned int color_is_reg_addr_valid(unsigned long addr)
 {
 	unsigned int i = 0;
 
-	if ((addr & 0x3) != 0) {
-		COLOR_ERR("color_is_reg_addr_valid, addr is not 4-byte aligned!\n");
-		return 0;
-	}
-
 	for (i = 0; i < DISP_REG_NUM; i++) {
-		if ((addr >= dispsys_reg[i]) && (addr < (dispsys_reg[i] + 0x1000)) && (dispsys_reg[i] != 0)) {
+		if ((addr >= dispsys_reg[i]) && (addr < (dispsys_reg[i] + 0x1000)))
 			break;
-		}
 	}
 
 	if (i < DISP_REG_NUM) {
@@ -2426,7 +2420,7 @@ static int _color_io(DISP_MODULE_ENUM module, int msg, unsigned long arg, void *
 				if (cmdq == NULL) {
 					mt_reg_sync_writel((unsigned int)(INREG32(va) &
 									  ~(wParams.
-										mask)) | (wParams.val),
+									    mask)) | (wParams.val),
 							   (unsigned long *)(va));
 				} else {
 					/* cmdqRecWrite(cmdq, TDSHP_PA_BASE + (wParams.reg - g_tdshp_va),
@@ -2453,10 +2447,10 @@ static int _color_io(DISP_MODULE_ENUM module, int msg, unsigned long arg, void *
 				return -EFAULT;
 			}
 			if (rParams.reg > DISP_COLOR_SWREG_END
-				|| rParams.reg < DISP_COLOR_SWREG_START) {
+			    || rParams.reg < DISP_COLOR_SWREG_START) {
 				COLOR_ERR
-					("sw reg read, addr invalid, addr min=0x%x, max=0x%x, addr=0x%x\n",
-					 DISP_COLOR_SWREG_START, DISP_COLOR_SWREG_END, rParams.reg);
+				    ("sw reg read, addr invalid, addr min=0x%x, max=0x%x, addr=0x%x\n",
+				     DISP_COLOR_SWREG_START, DISP_COLOR_SWREG_END, rParams.reg);
 				return -EFAULT;
 			}
 
@@ -2482,10 +2476,10 @@ static int _color_io(DISP_MODULE_ENUM module, int msg, unsigned long arg, void *
 
 
 			if (wParams.reg > DISP_COLOR_SWREG_END
-				|| wParams.reg < DISP_COLOR_SWREG_START) {
+			    || wParams.reg < DISP_COLOR_SWREG_START) {
 				COLOR_ERR
-					("sw reg write, addr invalid, addr min=0x%x, max=0x%x, addr=0x%x\n",
-					 DISP_COLOR_SWREG_START, DISP_COLOR_SWREG_END, wParams.reg);
+				    ("sw reg write, addr invalid, addr min=0x%x, max=0x%x, addr=0x%x\n",
+				     DISP_COLOR_SWREG_START, DISP_COLOR_SWREG_END, wParams.reg);
 				return -EFAULT;
 			}
 
@@ -2518,8 +2512,8 @@ static int _color_io(DISP_MODULE_ENUM module, int msg, unsigned long arg, void *
 			}
 
 			COLOR_DBG
-				("DISP_IOCTL_PQ_SET_WINDOW, before set... en[%d], x[0x%x], y[0x%x]\n",
-				 g_split_en, g_split_window_x, g_split_window_y);
+			    ("DISP_IOCTL_PQ_SET_WINDOW, before set... en[%d], x[0x%x], y[0x%x]\n",
+			     g_split_en, g_split_window_x, g_split_window_y);
 			ddp_color_set_window(&win_param, cmdq);
 			color_trigger_refresh(DISP_MODULE_COLOR0);
 
@@ -2684,16 +2678,16 @@ static int _color_build_cmdq(DISP_MODULE_ENUM module, void *cmdq_trigger_handle,
 	if ((module == DISP_MODULE_COLOR0) && (state == CMDQ_AFTER_STREAM_EOF)) {
 #if defined(CONFIG_ARCH_MT6595) || defined(CONFIG_ARCH_MT6795)
 		ret =
-			cmdqRecReadToDataRegister(cmdq_trigger_handle,
-						  ddp_reg_pa_base[DISP_REG_COLOR0] +
-						  (DISP_COLOR_TWO_D_W1_RESULT - DISPSYS_COLOR0_BASE),
-						  CMDQ_DATA_REG_PQ_COLOR);
+		    cmdqRecReadToDataRegister(cmdq_trigger_handle,
+					      ddp_reg_pa_base[DISP_REG_COLOR0] +
+					      (DISP_COLOR_TWO_D_W1_RESULT - DISPSYS_COLOR0_BASE),
+					      CMDQ_DATA_REG_PQ_COLOR);
 #else
 		ret =
-			cmdqRecReadToDataRegister(cmdq_trigger_handle,
-						  ddp_reg_pa_base[DISP_REG_COLOR] +
-						  (DISP_COLOR_TWO_D_W1_RESULT - DISPSYS_COLOR0_BASE),
-						  CMDQ_DATA_REG_PQ_COLOR);
+		    cmdqRecReadToDataRegister(cmdq_trigger_handle,
+					      ddp_reg_pa_base[DISP_REG_COLOR] +
+					      (DISP_COLOR_TWO_D_W1_RESULT - DISPSYS_COLOR0_BASE),
+					      CMDQ_DATA_REG_PQ_COLOR);
 #endif
 	}
 

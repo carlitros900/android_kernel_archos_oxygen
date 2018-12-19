@@ -236,7 +236,7 @@ static void disp_ccorr_init(disp_ccorr_id_t id, unsigned int width, unsigned int
 
 static int disp_ccorr_write_coef_reg(cmdqRecHandle cmdq, disp_ccorr_id_t id, int lock)
 {
-	const unsigned long ccorr_base = DISPSYS_CCORR_BASE;
+	const unsigned long ccorr_base = DISPSYS_CCORR_BASE + 0x80;
 	int ret = 0;
 	DISP_CCORR_COEF_T *ccorr;
 
@@ -251,7 +251,19 @@ static int disp_ccorr_write_coef_reg(cmdqRecHandle cmdq, disp_ccorr_id_t id, int
 	}
 
 	DISP_REG_SET(cmdq, DISP_REG_CCORR_EN, 1);
+#if 0
+	/*
+	 * enable ccorr engine
+	 */
 	DISP_REG_MASK(cmdq, DISP_REG_CCORR_CFG, 0x2, 0x2);
+#else
+	/*
+	 * 1) enanle ccorr engine
+	 * 2) disable gamma in ccorr
+	 * 3) set relay mode to 0
+	 */
+	DISP_REG_MASK(cmdq, DISP_REG_CCORR_CFG, 0x6, 0x7);
+#endif
 
 	DISP_REG_SET(cmdq, CCORR_REG(ccorr_base, 0),
 		     ((ccorr->coef[0][0] << 16) | (ccorr->coef[0][1])));

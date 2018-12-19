@@ -182,12 +182,26 @@ static struct APDS9930_priv *APDS9930_obj;
 int APDS9930_i2c_master_operate(struct i2c_client *client, char *buf, int count, int i2c_flag)
 {
 	int res = 0;
+	char *buffer;
+	int i;
 
 	mutex_lock(&APDS9930_mutex);
+	buffer = kmalloc(count,GFP_KERNEL);
+	if(!buffer) {
+		res = -ENOMEM;
+		goto EXIT_ERR;
+	}
+
+	if(!buf) {
+		res = -EINVAL;
+		goto EXIT_ERR;
+	}
 	switch (i2c_flag) {
 	case I2C_FLAG_WRITE:
 		/* client->addr &= I2C_MASK_FLAG; */
-		res = i2c_master_send(client, buf, count);
+		for(i = 0; i < count; i++)
+			*(buffer + i) = *(buf + i);
+		res = i2c_master_send(client, buffer, count);
 		/* client->addr &= I2C_MASK_FLAG; */
 		break;
 
@@ -197,9 +211,14 @@ int APDS9930_i2c_master_operate(struct i2c_client *client, char *buf, int count,
 		   client->addr |= I2C_WR_FLAG;
 		   client->addr |= I2C_RS_FLAG;
 		 */
-		res = i2c_master_send(client, buf, count & 0xFF);
+		for(i = 0; i < (count & 0xFF); i++)
+			*(buffer + i) = *(buf + i);
+		res = i2c_master_send(client, buffer, count & 0xFF);
 		/* client->addr &= I2C_MASK_FLAG; */
-		res = i2c_master_recv(client, buf, count >> 0x08);
+		res = i2c_master_recv(client, buffer, count >> 0x08);
+		for(i = 0; i < (count >> 0x08); i++)
+			*(buf + i) = *(buffer + i);
+
 		break;
 	default:
 		APS_LOG("APDS9930_i2c_master_operate i2c_flag command not support!\n");
@@ -209,8 +228,10 @@ int APDS9930_i2c_master_operate(struct i2c_client *client, char *buf, int count,
 		goto EXIT_ERR;
 
 	mutex_unlock(&APDS9930_mutex);
+	kfree(buffer);
 	return res;
  EXIT_ERR:
+	kfree(buffer);
 	mutex_unlock(&APDS9930_mutex);
 	APS_ERR("APDS9930_i2c_transfer fail\n");
 	return res;

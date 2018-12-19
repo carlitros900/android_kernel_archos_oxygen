@@ -175,9 +175,6 @@ void kpd_auto_test_for_factorymode(void)
 #endif
 }
 
-#ifdef CONFIG_KPD_PMIC_LPPWF
-#undef CONFIG_KPD_PMIC_LPRST_TD
-#endif
 /********************************************************************/
 void long_press_reboot_function_setting(void)
 {
@@ -225,11 +222,6 @@ void long_press_reboot_function_setting(void)
 #endif
 	}
 #else
-	upmu_set_rg_pwrkey_rst_en(0x00);
-	upmu_set_rg_homekey_rst_en(0x00);
-#endif
-
-#ifdef CONFIG_KPD_PMIC_LPPWF
 	upmu_set_rg_pwrkey_rst_en(0x00);
 	upmu_set_rg_homekey_rst_en(0x00);
 #endif

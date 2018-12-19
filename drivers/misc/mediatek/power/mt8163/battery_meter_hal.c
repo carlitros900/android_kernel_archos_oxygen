@@ -4,6 +4,13 @@
 #include <mt-plat/battery_meter_hal.h>
 #include <mach/mt_battery_meter.h>
 
+#include <mach/mt_ext_fg_defs.h>
+
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+#include <mach/bq27520.h>
+#endif
+
+
 /*============================================================ */
 /*define*/
 /*============================================================ */
@@ -21,6 +28,9 @@ signed int chip_diff_trim_value = 0; /* unit = 0.1*/
 signed int g_hw_ocv_tune_value = 8;
 
 kal_bool g_fg_is_charging = 0;
+
+kal_bool ext_fg_init_done = KAL_FALSE;
+
 
 /*============================================================ */
 /*function prototype*/
@@ -202,6 +212,31 @@ int get_hw_ocv(void)
 
 static signed int fgauge_initialization(void *data)
 {
+#ifdef SOC_BY_EXT_HW_FG
+        //wait I2C init done
+        int m = 0;
+        bm_print(BM_LOG_CRTI, "[fgauge_initialization] wait ext fg init done...\n");
+        while (1)
+        {
+            if (ext_fg_init_done == KAL_TRUE)
+            {
+                bm_print(BM_LOG_CRTI, "[fgauge_initialization] ext fg init done!\n");
+                break;
+            }
+            else
+            {
+                m++;
+                msleep(10);
+                if (m>100)
+                {
+                    bm_print(BM_LOG_CRTI, "[fgauge_initialization] timeout!\r\n");
+                    break;
+                }
+            }
+        }
+
+        return STATUS_OK;
+#endif
 	return STATUS_OK;
 }
 
@@ -284,7 +319,7 @@ static signed int read_adc_v_bat_temp(void *data)
 	return STATUS_OK;
 }
 
-signed int read_adc_v_charger(void *data)
+static signed int read_adc_v_charger(void *data)
 {
 #if defined(CONFIG_POWER_EXT)
 	*(signed int *)(data) = 5001;
@@ -316,6 +351,200 @@ static signed int dump_register_fgadc(void *data)
 	return STATUS_OK;
 }
 
+
+#ifdef EXT_FG_HAS_SOC
+static kal_int32 ext_fg_get_soc(void *data)
+{
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+    int ret = 0;
+    int returnData = 0;
+    ret = ext_get_data_from_bq27520(bq27520_CMD_StateOfCharge, (char *)&returnData, 2);
+    if(ret == 1)
+    {
+	bm_print(BM_LOG_CRTI, "[ext_fg_get_soc] bq27520 read raw data = %d\n", returnData);
+	*(kal_int32 *)(data) = returnData;
+	return STATUS_OK;
+    }
+    else
+    {
+        return STATUS_UNSUPPORTED;
+    }
+#endif
+
+    return STATUS_OK;
+}
+#endif
+
+#ifdef EXT_FG_HAS_TEMPERATURE
+static kal_int32 ext_fg_get_temperature(void *data)
+{
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+    int ret = 0;
+    int returnData = 0;
+
+    ret = ext_get_data_from_bq27520(bq27520_CMD_Temperature, (char *)&returnData, 2);
+    if(ret == 1)
+    {
+        bm_print(BM_LOG_CRTI, "[ext_fg_get_temperature] bq27520 read raw data = %d\n", returnData);
+        *(kal_int32 *)(data) = ((returnData/10) - 273);
+        return STATUS_OK;
+    }
+    else
+    {
+        return STATUS_UNSUPPORTED;
+    }
+#endif
+
+    return STATUS_OK;
+}
+#endif
+
+#ifdef EXT_FG_HAS_VOLTAGE
+static kal_int32 ext_fg_get_voltage(void *data)
+{
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+    int ret = 0;
+    int returnData = 0;
+
+    ret = ext_get_data_from_bq27520(bq27520_CMD_Voltage, (char *)&returnData, 2);
+    if(ret == 1)
+    {
+        bm_print(BM_LOG_CRTI, "[ext_fg_get_voltage] bq27520 read voltage data = %d\n", returnData);
+	 if(returnData <= 0)
+		return STATUS_UNSUPPORTED;
+	 else
+		*(kal_int32 *)(data) = returnData;
+        return STATUS_OK;
+    }
+    else
+    {
+        return STATUS_UNSUPPORTED;
+    }
+#endif
+
+    return STATUS_OK;
+}
+#endif
+
+#ifdef EXT_FG_HAS_CURRENT
+static kal_int32 ext_fg_get_current(void *data)
+{
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+    int ret = 0;
+    int returnData = 0;
+
+    ret = ext_get_data_from_bq27520(bq27520_CMD_AverageCurrent, (char *)&returnData, 2);
+    if(ret == 1)
+    {
+        bm_print(BM_LOG_CRTI, "[ext_fg_get_current] bq27520 read current raw data = %d\n", returnData);
+		if(returnData > 0x8000){
+			returnData = (0xFFFF^(returnData - 1))*(-1);
+		}
+		bm_print(BM_LOG_CRTI, "[ext_fg_get_current] current data = %dmA\n", returnData);
+
+        *(kal_int32 *)(data) = returnData * 10;
+
+        return STATUS_OK;
+    }
+    else
+    {
+        return STATUS_UNSUPPORTED;
+    }
+#endif
+
+    return STATUS_OK;
+}
+#endif
+
+#ifdef EXT_FG_HAS_SHUTDOWN
+static kal_int32 ext_fg_shutdown(void *data)
+{
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+	int ret =0;
+
+	ret = bq27520_set_hibernate_mode(1);
+
+	if(ret == 1)
+	{
+		return STATUS_OK;
+	}
+	else
+	{
+		return STATUS_UNSUPPORTED;
+	}
+#endif
+
+    return STATUS_OK;
+}
+#endif
+
+static signed int ext_hw_fg(void *data)
+{
+#ifdef SOC_BY_EXT_HW_FG
+    kal_int32 cmd = EXT_FG_CMD_NUMBER;
+
+    //make ext fg I2C init done
+    if (ext_fg_init_done == KAL_FALSE)
+    {
+        bm_print(BM_LOG_CRTI, "[ext_hw_fg] ext fg is not ready\n");
+        return STATUS_UNSUPPORTED;
+    }
+
+    //translate ext fg cmd
+    if (data)
+    {
+        cmd = *(kal_int32 *)(data);
+    }
+    else
+    {
+        bm_print(BM_LOG_CRTI, "[ext_hw_fg] NULL cmd!\n");
+        return STATUS_UNSUPPORTED;
+    }
+
+    //switch case to get battery information
+    switch (cmd)
+    {
+#ifdef EXT_FG_HAS_SOC
+        case EXT_FG_CMD_SOC:
+            return ext_fg_get_soc(data);
+            break;
+#endif
+
+#ifdef EXT_FG_HAS_TEMPERATURE
+        case EXT_FG_CMD_TEMPERATURE:
+            return ext_fg_get_temperature(data);
+            break;
+#endif
+
+#ifdef EXT_FG_HAS_VOLTAGE
+		case EXT_FG_CMD_VOLTAGE:
+			return ext_fg_get_voltage(data);
+			break;
+#endif
+
+#ifdef EXT_FG_HAS_CURRENT
+		case EXT_FG_CMD_CURRENT:
+			return ext_fg_get_current(data);
+			break;
+#endif
+
+#ifdef EXT_FG_HAS_SHUTDOWN
+		case EXT_FG_CMD_SHUTDOWN:
+			return ext_fg_shutdown(data);
+			break;
+#endif
+
+        default:
+            bm_print(BM_LOG_CRTI, "[ext_hw_fg] unsupported cmd(%d)!\n", cmd);
+            return STATUS_UNSUPPORTED;
+    }
+#endif
+
+    return STATUS_UNSUPPORTED;
+}
+
+
+
 static signed int(*bm_func[BATTERY_METER_CMD_NUMBER]) (void *data);
 
 signed int bm_ctrl_cmd(BATTERY_METER_CTRL_CMD cmd, void *data)
@@ -336,6 +565,7 @@ signed int bm_ctrl_cmd(BATTERY_METER_CTRL_CMD cmd, void *data)
 		bm_func[BATTERY_METER_CMD_GET_ADC_V_CHARGER] = read_adc_v_charger;
 		bm_func[BATTERY_METER_CMD_GET_HW_OCV] = read_hw_ocv;
 		bm_func[BATTERY_METER_CMD_DUMP_REGISTER] = dump_register_fgadc;
+		bm_func[BATTERY_METER_CMD_EXT_HW_FG] = ext_hw_fg;
 	}
 
 	if (cmd < BATTERY_METER_CMD_NUMBER) {

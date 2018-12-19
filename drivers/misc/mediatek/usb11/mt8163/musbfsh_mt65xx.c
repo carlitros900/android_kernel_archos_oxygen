@@ -7,15 +7,7 @@
 #ifdef CONFIG_OF
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
-#include <linux/of.h>
-#include <linux/of_device.h>
-#include <linux/of_gpio.h>
-#include <linux/regulator/consumer.h>
-#include <linux/clk.h>
 #endif
-
-#include <linux/notifier.h>
-#include <linux/fb.h>
 
 #include "musb.h"
 #include "musbfsh_core.h"
@@ -674,323 +666,6 @@ static const struct musbfsh_platform_ops mt_usb11_ops = {
 	.set_power = mt_usb11_poweron,
 };
 
-
-#ifdef CONFIG_OF
-static struct regulator *hub_vgp = NULL;
-static struct pinctrl_state *hub_rst_high = NULL;
-static struct pinctrl_state *hub_rst_low = NULL;
-static struct pinctrl_state *hub_rst_default = NULL;
-static struct pinctrl *pinctrl;
-static struct pinctrl_state *pinctrl_pogo = NULL;
-static struct pinctrl_state *pinctrl_pogo_low = NULL;
-static struct pinctrl_state *pinctrl_pogo_high = NULL;
-static struct pinctrl_state *pinctrl_vdd_5v_en = NULL;
-static struct pinctrl_state *pinctrl_vdd_5v_en_low = NULL;
-static struct pinctrl_state *pinctrl_vdd_5v_en_high = NULL;
-
-#define TYPE_HUB_RST  1
-#define TYPE_POGO_EN  2
-#define TYPE_VDD_5V_EN 3
-
-static int pogo_hub_get_gpio(struct device *dev)
-{
-	int ret = 0;
-
-	pinctrl = devm_pinctrl_get(dev);
-	if (IS_ERR(pinctrl) || NULL == pinctrl) {
-		dev_err(dev, "Cannot find hub rest pinctrl!");
-		ret = PTR_ERR(pinctrl);
-		return ret;
-	}
-	/*USB power pin lookup */
-	hub_rst_default = pinctrl_lookup_state(pinctrl, "hub_rst_init");
-	if (IS_ERR(hub_rst_default) || NULL == hub_rst_default) {
-		ret = PTR_ERR(hub_rst_default);
-		pr_debug("%s : pinctrl err, hub_rst_default\n", __func__);
-	}
-	hub_rst_high = pinctrl_lookup_state(pinctrl, "hub_rst_high");
-	if (IS_ERR(hub_rst_high) || NULL == hub_rst_high) {
-		ret = PTR_ERR(hub_rst_high);
-		pr_debug("%s : pinctrl err, hub_rst_high\n", __func__);
-	}
-	hub_rst_low = pinctrl_lookup_state(pinctrl, "hub_rst_low");
-	if (IS_ERR(hub_rst_low) || NULL == hub_rst_low) {
-		ret = PTR_ERR(hub_rst_low);
-		pr_debug("%s : pinctrl err, hub_rst_low\n", __func__);
-	}
-	
-	pinctrl_pogo = pinctrl_lookup_state(pinctrl, "pogo_init");
-	if (IS_ERR(pinctrl_pogo)) {
-		ret = PTR_ERR(pinctrl_pogo);
-		dev_err(dev, "Cannot find usb pinctrl pogo\n");
-	}
-
-	pinctrl_pogo_low = pinctrl_lookup_state(pinctrl, "pogo_low");
-	if (IS_ERR(pinctrl_pogo_low)) {
-		ret = PTR_ERR(pinctrl_pogo_low);
-		dev_err(dev, "Cannot find usb pinctrl pogo_low\n");
-	}
-
-	pinctrl_pogo_high = pinctrl_lookup_state(pinctrl, "pogo_high");
-	if (IS_ERR(pinctrl_pogo_high)) {
-		ret = PTR_ERR(pinctrl_pogo_high);
-		dev_err(dev, "Cannot find usb pinctrl pogo_high\n");
-	}
-	
-	pinctrl_vdd_5v_en = pinctrl_lookup_state(pinctrl, "vdd_v5_en_init");
-	if (IS_ERR(pinctrl_vdd_5v_en)) {
-		ret = PTR_ERR(pinctrl_vdd_5v_en);
-		dev_err(dev, "Cannot find usb pinctrl pinctrl_vdd_5v_en\n");
-	}
-
-	pinctrl_vdd_5v_en_low = pinctrl_lookup_state(pinctrl, "vdd_v5_en_low");
-	if (IS_ERR(pinctrl_vdd_5v_en_low)) {
-		ret = PTR_ERR(pinctrl_vdd_5v_en_low);
-		dev_err(dev, "Cannot find usb pinctrl pinctrl_vdd_5v_en_low\n");
-	}
-
-	pinctrl_vdd_5v_en_high = pinctrl_lookup_state(pinctrl, "vdd_v5_en_high");
-	if (IS_ERR(pinctrl_vdd_5v_en_high)) {
-		ret = PTR_ERR(pinctrl_vdd_5v_en_high);
-		dev_err(dev, "Cannot find usb pinctrl pinctrl_vdd_5v_en_high\n");
-	}
-	return ret;
-}
-
-static bool my_set_gpio(int type, int val)
-{
-	struct pinctrl_state * pCtrl = NULL;
-	char * pStrDebug = NULL;
-	
-	if ( NULL == pinctrl || IS_ERR(pinctrl)) {
-		return false;
-	}
-	
-	if (val == 0) {
-		switch(type) {
-		case TYPE_HUB_RST:
-			pCtrl = hub_rst_low;
-			pStrDebug = "hub_rst";
-			break;
-		case TYPE_POGO_EN:
-			pCtrl = pinctrl_pogo_low;
-			pStrDebug = "pogo_en";
-			break;
-		case TYPE_VDD_5V_EN:
-			pCtrl = pinctrl_vdd_5v_en_low;
-			pStrDebug = "vdd_5vp01_en";
-			break;
-		default:
-			pCtrl = NULL;
-			pStrDebug = "null";
-			break;
-		}
-		
-		if ( pCtrl == NULL || IS_ERR(pCtrl)) return false;
-			
-		pinctrl_select_state(pinctrl, pCtrl);
-		pr_debug("USB: %s set power off\n", pStrDebug);
-	} else {
-		switch(type) {
-		case TYPE_HUB_RST:
-			pCtrl = hub_rst_high;
-			pStrDebug = "hub_rst";
-			break;
-		case TYPE_POGO_EN:
-			pCtrl = pinctrl_pogo_high;
-			pStrDebug = "pogo_en";
-			break;
-		case TYPE_VDD_5V_EN:
-			pCtrl = pinctrl_vdd_5v_en_high;
-			pStrDebug = "vdd_5vp01_en";
-			break;
-		default:
-			pCtrl = NULL;
-			pStrDebug = "null";
-			break;
-		}
-		
-		if ( pCtrl == NULL || IS_ERR(pCtrl)) return false;
-			
-		pinctrl_select_state(pinctrl, pCtrl);
-		pr_debug("USB: %s set power on\n", pStrDebug);
-	}
-	return true;
-}
-
-
-/* get LDO supply */
-static int hub_get_vgp_supply(struct device *dev)
-{
-	int ret = -1;
-	struct regulator *hub_vgp_ldo;
-
-	pr_err("USB: %s is going \n", __func__);
-
-	hub_vgp_ldo = devm_regulator_get(dev, "usb_hub");
-	if (IS_ERR(hub_vgp_ldo)) {
-		ret = PTR_ERR(hub_vgp_ldo);
-		dev_err(dev, "failed to get usb_hub LDO, %d\n", ret);
-		return ret;
-	}
-
-	pr_debug("USB: USB get supply ok.\n");
-
-	ret = regulator_enable(hub_vgp_ldo);
-	/* get current voltage settings */
-	ret = regulator_get_voltage(hub_vgp_ldo);
-	pr_debug("USB LDO voltage = %d in LK stage\n", ret);
-
-	hub_vgp = hub_vgp_ldo;
-
-	return ret;
-}
-
-int hub_vgp_supply_enable(void)
-{
-	int ret;
-	unsigned int volt;
-
-	pr_debug("USB: hub_vgp_supply_enable\n");
-
-	if (NULL == hub_vgp)
-		return -1;
-
-	pr_debug("USB: set regulator voltage hub_vgp voltage to 1.8V\n");
-	/* set voltage to 1.8V */
-	//ret = regulator_set_voltage(hub_vgp, 1800000, 1800000);
-	ret = regulator_set_voltage(hub_vgp, 3300000, 3300000);
-	if (ret != 0) {
-		pr_err("USB: USB failed to set hub_vgp voltage: %d\n", ret);
-		return ret;
-	}
-
-	/* get voltage settings again */
-	volt = regulator_get_voltage(hub_vgp);
-	if (volt == 3300000)
-		pr_err("USB: check regulator voltage=3300000 pass!\n");
-	else
-		pr_err("USB: check regulator voltage=3300000 fail! (voltage: %d)\n", volt);
-
-	ret = regulator_enable(hub_vgp);
-	if (ret != 0) {
-		pr_err("USB: Failed to enable hub_vgp: %d\n", ret);
-		return ret;
-	}
-
-	return ret;
-}
-
-int hub_vgp_supply_disable(void)
-{
-	int ret = 0;
-	unsigned int isenable;
-
-	if (NULL == hub_vgp)
-		return -1;
-
-	/* disable regulator */
-	isenable = regulator_is_enabled(hub_vgp);
-
-	pr_debug("USB: USB query regulator enable status[0x%d]\n", isenable);
-
-	if (isenable) {
-		ret = regulator_disable(hub_vgp);
-		if (ret != 0) {
-			pr_err("USB: USB failed to disable hub_vgp: %d\n", ret);
-			return ret;
-		}
-		/* verify */
-		isenable = regulator_is_enabled(hub_vgp);
-		if (!isenable)
-			pr_err("USB: USB regulator disable pass\n");
-	}
-
-	return ret;
-}
-#endif
-
-static void musbfsh_early_suspend(void)
-{
-	printk("%s: ===>begin\n", __func__);	
-	
-	if (my_set_gpio(TYPE_POGO_EN, 0)) {
-		mdelay(20);
-	}
-	
-	if (my_set_gpio(TYPE_HUB_RST, 0)) {
-		mdelay(20);
-	}
-	
-	hub_vgp_supply_disable();
-	
-	printk("%s: ===>end\n", __func__);	
-}
-
-static void musbfsh_late_resume(void)
-{
-	printk("%s: ===>begin\n", __func__);	
-	
-	if (0 == hub_vgp_supply_enable()) {
-	    mdelay(20);
-	}
-	
-    if (my_set_gpio(TYPE_HUB_RST, 1)) {
-		mdelay(20);
-	}
-	
-	if (my_set_gpio(TYPE_POGO_EN, 1)) {
-		mdelay(20);
-	}
-	printk("%s: ===>end\n", __func__);	
-}
-
-
-static int _musb_notifier_callback(struct notifier_block *self ,unsigned long event , void *data)
-{
-	struct fb_event *evdata = data ; 
-	int blank ; 
-	
-	//FUNC_ENTER(FUNC_LV_MODULE);
-	
-	/*skip if it's not a blank event */
-	if(event != FB_EVENT_BLANK)
-		return 0 ; 
-		
-	if(evdata == NULL)
-		return 0 ;
-		
-	if(evdata->data == NULL)
-		return 0 ; 
-		
-	blank = *(int *)evdata->data;
-	printk("%s : blank = %d , event = %lu\n", __FUNCTION__,blank,event);
-	
-	switch(blank){
-	/* resume */
-	case FB_BLANK_UNBLANK:
-	case FB_BLANK_NORMAL:
-		musbfsh_late_resume();
-		break;
-		
-	/* suspend */
-	case FB_BLANK_POWERDOWN:
-		musbfsh_early_suspend();
-		break;
-		
-	default:
-		break;
-	}
-	
-	//FUNC_EXIT(FUNC_LV_MODULE);
-	
-	return 0;
-}
-
-static struct notifier_block _musb_notifier = { 
-	.notifier_call  = _musb_notifier_callback,
-}; 
-
 static u64 mt_usb11_dmamask = DMA_BIT_MASK(32);
 
 static int __init mt_usb11_probe(struct platform_device *pdev)
@@ -1002,7 +677,6 @@ static int __init mt_usb11_probe(struct platform_device *pdev)
 	int ret = -ENOMEM;
 	int musbfshid;
 	struct device_node *np = pdev->dev.of_node;
-	struct device *dev = &pdev->dev;
 
 	INFO("[Flow][USB11]%s:%d\n", __func__, __LINE__);
 	glue = kzalloc(sizeof(*glue), GFP_KERNEL);
@@ -1091,28 +765,6 @@ static int __init mt_usb11_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to register musbfsh device\n");
 		goto err3;
 	}
-	
-	if(fb_register_client(&_musb_notifier))
-		printk("%s : register FB client failed !\n",__FUNCTION__);
-	
-	hub_get_vgp_supply(dev);
-	pogo_hub_get_gpio(dev);
-	
-	if (0 == hub_vgp_supply_enable()) {
-	    mdelay(20);
-	}
-	
-	if (my_set_gpio(TYPE_VDD_5V_EN, 1)) {
-		mdelay(20);
-	}
-	
-    if (my_set_gpio(TYPE_HUB_RST, 1)) {
-		mdelay(20);
-	}
-	
-	if (my_set_gpio(TYPE_POGO_EN, 1)) {
-		mdelay(20);
-	}
 
 	return 0;
 
@@ -1132,9 +784,7 @@ err0:
 static int __exit mt_usb_remove(struct platform_device *pdev)
 {
 	struct mt_usb11_glue *glue = platform_get_drvdata(pdev);
-	
-	fb_unregister_client(&_musb_notifier);
-	
+
 	musbfsh_put_id(&pdev->dev, glue->musbfsh->id);
 	platform_device_del(glue->musbfsh);
 	platform_device_put(glue->musbfsh);
@@ -1142,39 +792,6 @@ static int __exit mt_usb_remove(struct platform_device *pdev)
 
 	return 0;
 }
-
-static int mt_usb11_suspend(struct device *dev)
-{
-	printk("%s:=====================>\n", __func__);
-	
-	if (my_set_gpio(TYPE_VDD_5V_EN, 0)) {
-		mdelay(20);
-	}
-
-	return 0;
-}
-
-static int mt_usb11_resume(struct device *dev)
-{
-	printk("%s:=====================>\n", __func__);
-	
-	
-	if (my_set_gpio(TYPE_VDD_5V_EN, 1)) {
-		mdelay(20);
-	}
-	return 0;
-}
-
-static const struct dev_pm_ops mt_usb11_dev_pm_ops = {
-	.suspend = mt_usb11_suspend,
-	.resume = mt_usb11_resume,
-};
-
-#ifndef MT_USB11_DEV_PM_OPS
-#define MT_USB11_DEV_PM_OPS (&mt_usb11_dev_pm_ops)
-#else
-#define	MT_USB11_DEV_PM_OPS	NULL
-#endif
 
 static struct platform_driver mt_usb11_driver = {
 	.remove = __exit_p(mt_usb_remove),
@@ -1184,7 +801,6 @@ static struct platform_driver mt_usb11_driver = {
 #ifdef CONFIG_OF
 	.of_match_table = apusb_of_ids,
 #endif
-	.pm = MT_USB11_DEV_PM_OPS,
 	},
 };
 

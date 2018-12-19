@@ -42,18 +42,12 @@
 #define SENSOR_TYPE_GLANCE_GESTURE      24
 #define SENSOR_TYPE_PICK_UP_GESTURE     25
 #define SENSOR_TYPE_WRIST_TILT_GESTURE  26
-//add by alex for software gyroscope
-#ifdef CONFIG_SOFTWARE_MMC_GYROSCOPE
-#define SENSOR_TYPE_PEDOMETER           (26)
-#define SENSOR_TYPE_IN_POCKET           (27)
-#define SENSOR_TYPE_ACTIVITY            (28)
-#else
+
 #define SENSOR_TYPE_PEDOMETER           (35)
-#define SENSOR_TYPE_IN_POCKET           (36)
-#define SENSOR_TYPE_ACTIVITY            (37)
-#endif
 #define SENSOR_STRING_TYPE_PEDOMETER                 "android.sensor.pedometer"
+#define SENSOR_TYPE_IN_POCKET           (36)
 #define SENSOR_STRING_TYPE_IN_POCKET                 "android.sensor.in_pocket"
+#define SENSOR_TYPE_ACTIVITY            (37)
 #define SENSOR_STRING_TYPE_ACTIVITY                  "android.sensor.activity"
 #define SENSOR_TYPE_PDR					38 /*Add kernel driver*/
 #define SENSOR_STRING_TYPE_PDR                  "android.sensor.pdr"
@@ -61,21 +55,17 @@
 #define SENSOR_STRING_TYPE_FREEFALL                "android.sensor.freefall"
 #define SENSOR_TYPE_ACCELEROMETER_UNCALIBRATED		40 /*Add kernel driver*/
 #define SENSOR_STRING_TYPE_ACCELEROMETER_UNCALIBRATED    "android.sensor.accelerometer_uncalibrated"
-//add by alex for software gyroscope
-#ifdef CONFIG_SOFTWARE_MMC_GYROSCOPE
-#define SENSOR_TYPE_FACE_DOWN           (29)
-#define SENSOR_TYPE_SHAKE               (30)
-#define SENSOR_TYPE_BRINGTOSEE          (31)
-#else
+
 #define SENSOR_TYPE_FACE_DOWN           (41)
-#define SENSOR_TYPE_SHAKE               (42)
-#define SENSOR_TYPE_BRINGTOSEE          (43)
-#endif
 #define SENSOR_STRING_TYPE_FACE_DOWN                 "android.sensor.face_down"
+#define SENSOR_TYPE_SHAKE               (42)
 #define SENSOR_STRING_TYPE_SHAKE                     "android.sensor.shake"
+#define SENSOR_TYPE_BRINGTOSEE          (43)
 #define SENSOR_STRING_TYPE_BRINGTOSEE               "android.sensor.bring_to_see"
 #define SENSOR_TYPE_ANSWER_CALL          (44)
 #define SENSOR_STRING_TYPE_ANSWERCALL               "android.sensor.answer_call"
+#define SENSOR_TYPE_FLIP_DETECTION        (45)
+#define SENSOR_STRING_TYPE_FLIP_DETECTION            "android.sensor.flip_detection"
 
 /*---------------------------------------------------------------------------*/
 #define ID_BASE							0
@@ -111,7 +101,6 @@
 #define ID_IN_POCKET                    (ID_BASE+SENSOR_TYPE_IN_POCKET-1)
 #define ID_ACTIVITY                     (ID_BASE+SENSOR_TYPE_ACTIVITY-1)
 #define ID_PDR							(ID_BASE+SENSOR_TYPE_PDR-1)
-#define ID_IN_POCKET                                     (ID_BASE+SENSOR_TYPE_IN_POCKET-1)
 #define ID_FREEFALL						(ID_BASE+SENSOR_TYPE_FREEFALL-1)
 #define ID_ACCELEROMETER_UNCALIBRATED	(ID_BASE+SENSOR_TYPE_ACCELEROMETER_UNCALIBRATED-1)
 
@@ -119,7 +108,8 @@
 #define ID_SHAKE                                        (ID_BASE+SENSOR_TYPE_SHAKE-1)
 #define ID_BRINGTOSEE                                   (ID_BASE+SENSOR_TYPE_BRINGTOSEE-1)
 #define ID_ANSWER_CALL                                   (ID_BASE+SENSOR_TYPE_ANSWER_CALL-1)
-#define ID_SENSOR_MAX_HANDLE	  (ID_BASE+SENSOR_TYPE_BRINGTOSEE)
+#define ID_FLIP_DETECTION                (ID_BASE+SENSOR_TYPE_FLIP_DETECTION-1)
+#define ID_SENSOR_MAX_HANDLE	  (ID_BASE+SENSOR_TYPE_ANSWER_CALL)
 #define ID_NONE							    (ID_SENSOR_MAX_HANDLE+1)
 
 #define ID_OFFSET                           (1)
@@ -133,7 +123,6 @@
 #define SENSOR_MAGNETIC					(1 << ID_MAGNETIC)
 #define SENSOR_ORIENTATION				(1 << ID_ORIENTATION)
 #define SENSOR_GYROSCOPE				(1 << ID_GYROSCOPE)
-#define SENSOR_HUMIDITY					(1 << ID_HUMIDITY)
 #define SENSOR_LIGHT					(1 << ID_LIGHT)
 #define SENSOR_HUMIDITY					(1 << ID_HUMIDITY)
 #define SENSOR_PRESSURE					(1 << ID_PRESSURE)
@@ -171,6 +160,7 @@
 #define SENSOR_SHAKE                        (1 << ID_SHAKE)
 #define SENSOR_BRINGTOSEE                   (1 << ID_BRINGTOSEE)
 #define SENSOR_ANSWER_CALL                   (1 << ID_ANSWER_CALL)
+#define SENSOR_FLIP_DETECTION               (1 << ID_FLIP_DETECTION)
 
 /*----------------------------------------------------------------------------*/
 #define HWM_INPUTDEV_NAME               "hwmdata"
@@ -291,9 +281,6 @@
 #define PEDO_INPUTDEV_NAME               "m_pedo_input"
 #define PEDO_MISC_DEV_NAME               "m_pedo_misc"
 
-#define PDR_PL_DEV_NAME                 "m_pdr_pl"
-#define PDR_INPUTDEV_NAME               "m_pdr_input"
-#define PDR_MISC_DEV_NAME               "m_pdr_misc"
 
 
 #define EVENT_TYPE_SENSOR				0x01

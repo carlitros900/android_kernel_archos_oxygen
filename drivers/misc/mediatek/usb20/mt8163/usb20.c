@@ -403,7 +403,7 @@ bool usb_cable_connected(void)
 #ifdef FPGA_PLATFORM
 	return true;
 #else
-	int charge_type;
+
 #ifdef CONFIG_USB_MTK_OTG
 /*ALPS00775710*/
 #if 0
@@ -419,9 +419,13 @@ bool usb_cable_connected(void)
 	/*ALPS00775710*/
 #endif
 
-	charge_type = mt_get_charger_type();
-
-	if ((charge_type == STANDARD_HOST) || (charge_type == CHARGING_HOST))
+/*#ifdef CONFIG_POWER_EXT*/
+	/*if (mt_get_charger_type()*/
+	/* if((mt_get_charger_type()==STANDARD_HOST) || (mt_get_charger_type()==CHARGING_HOST)*/
+/*#else*/
+/*	if (upmu_is_chr_det()*/
+/*#endif*/
+	if (1)
 		return true;
 	else
 		return false;
@@ -1359,6 +1363,7 @@ static int mt_usb_dts_remove(struct platform_device *pdev)
 	kfree(glue);
 
 #ifndef CONFIG_MTK_CLKMGR
+	clk_unprepare(icusb_clk);
 	clk_unprepare(usbmcu_clk);
 	clk_unprepare(usb_clk);
 	clk_unprepare(usbpll_clk);

@@ -58,7 +58,7 @@
 #include "mt_soc_analog_type.h"
 #include "mt_soc_pcm_common.h"
 
-#if 0
+
 static int dummy_codec_startup(struct snd_pcm_substream *substream ,
 			       struct snd_soc_dai *Daiport)
 {
@@ -92,15 +92,12 @@ static int dummy_codec_trigger(struct snd_pcm_substream *substream ,
 	pr_debug("dummy_codec_trigger command = %d\n", command);
 	return 0;
 }
-#endif
 
-/*
 static const struct snd_soc_dai_ops dummy_aif1_dai_ops = {
 	.startup    = dummy_codec_startup,
 	.prepare   = dummy_codec_prepare,
 	.trigger     = dummy_codec_trigger,
 };
-*/
 
 static struct snd_soc_dai_driver dummy_6323_dai_codecs[] = {
 	{

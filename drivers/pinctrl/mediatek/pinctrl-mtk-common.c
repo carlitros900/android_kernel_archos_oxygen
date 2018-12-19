@@ -53,11 +53,7 @@ static const char * const mtk_gpio_functions[] = {
 	"func0", "func1", "func2", "func3",
 	"func4", "func5", "func6", "func7",
 };
-#if 1
 
-struct pinctrl_dev *pctldev_opt_chip_gpio ;
-struct mtk_pinctrl *pctl_opt_chip_gpio;
-#endif
 /*
  * There are two base address for pull related configuration
  * in mt8135, and different GPIO pins use different base address.
@@ -1400,42 +1396,6 @@ static ssize_t mt_gpio_store_pin(struct device *dev, struct device_attribute *at
 	return count;
 }
 
-#if 1
-
-void mt_gpio_opt_mode(int gpio,int mode)
-{
-if(pctldev_opt_chip_gpio==NULL)
-{
-printk("error:%s->because pctldev_opt_chip_gpio is null!\n",__FUNCTION__);
-return ;
-}
-	mtk_pmx_set_mode(pctldev_opt_chip_gpio, gpio, mode);
-
-}
-void mt_gpio_opt_dir(int gpio,int dir)
-{
-	if(pctldev_opt_chip_gpio==NULL)
-	{
-	printk("error:%s->because pctldev_opt_chip_gpio is null!\n",__FUNCTION__);
-	return ;
-	}
-/*     0 :out    ,  1: in  */
-	mtk_pmx_gpio_set_direction(pctldev_opt_chip_gpio, NULL, gpio, dir);
-
-}
-void mt_gpio_opt_output(int gpio,int val)
-{
-	
-	if(pctl_opt_chip_gpio==NULL)
-	{
-	printk("error:%s->because pctldev_opt_chip_gpio is null!\n",__FUNCTION__);
-	return ;
-	}
-		mtk_gpio_set(pctl_opt_chip_gpio->chip, gpio, val);
-
-}
-#endif
-
 static DEVICE_ATTR(mt_gpio, 0664, mt_gpio_show_pin, mt_gpio_store_pin);
 
 static struct device_attribute *gpio_attr_list[] = {
@@ -1908,11 +1868,7 @@ int mtk_pctrl_init(struct platform_device *pdev,
 	irq_set_chained_handler(irq, mtk_eint_irq_handler);
 	irq_set_handler_data(irq, pctl);
 	set_irq_flags(irq, IRQF_VALID);
-	
-#if 1
-	pctl_opt_chip_gpio=pctl;   
-	pctldev_opt_chip_gpio=pctl->pctl_dev;
-#endif
+
 	pr_warn("mtk_pctrl_init------ ok\n");
 	return 0;
 

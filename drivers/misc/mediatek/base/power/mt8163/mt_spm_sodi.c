@@ -619,11 +619,12 @@ void spm_go_to_sodi(u32 spm_flags, u32 spm_data)
 
 	__spm_get_wakeup_status(&wakesta);
 
-	spm_idle_ver("SODI:dram-selfrefrsh cnt %d", spm_read(SPM_PCM_PASR_DPD_3));
+	/* spm_idle_ver("SODI:dram-selfrefrsh cnt %d", spm_read(SPM_PCM_PASR_DPD_3)); */
 
 	__spm_clean_after_wakeup();
 
-	wr = __spm_output_wake_reason(&wakesta, pcmdesc, false);
+	if (pwrctrl->enable_log)
+		wr = __spm_output_wake_reason(&wakesta, pcmdesc, false);
 
 	mt_cirq_flush();
 	mt_cirq_disable();

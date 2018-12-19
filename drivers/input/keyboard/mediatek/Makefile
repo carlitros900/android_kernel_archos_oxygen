@@ -2,6 +2,6 @@ subdir-ccflags-y += -Werror -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$
 subdir-ccflags-y += -I$(srctree)/drivers/input/keyboard/mediatek/$(CONFIG_MTK_PLATFORM)/
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/
 obj-$(CONFIG_KEYBOARD_MTK) := kpd.o
-
+obj-$(CONFIG_CUSTOM_KERNEL_KPD_MHALL) += kpd_mhall.o
 obj-y += $(subst ",,$(CONFIG_MTK_PLATFORM))/
 

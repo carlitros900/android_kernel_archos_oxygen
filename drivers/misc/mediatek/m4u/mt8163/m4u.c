@@ -115,16 +115,6 @@ static void m4u_profile_init(void)
 /* get ref count on all pages in sgtable */
 int m4u_get_sgtable_pages(struct sg_table *table)
 {
-	int i;
-	struct scatterlist *sg;
-
-	for_each_sg(table->sgl, sg, table->nents, i) {
-		struct page *page = sg_page(sg);
-
-		M4ULOG_LOW("m4u_get_sgtable_pages, i=%d, page=0x%p\n", i, page);
-		if (page)
-			get_page(page);
-	}
 	return 0;
 }
 
@@ -137,8 +127,11 @@ int m4u_put_sgtable_pages(struct sg_table *table)
 	for_each_sg(table->sgl, sg, table->nents, i) {
 		struct page *page = sg_page(sg);
 
-		if (page)
-			put_page(page);
+		if (page) {
+			if (!PageReserved(page))
+				SetPageDirty(page);
+			page_cache_release(page);
+		}
 	}
 	return 0;
 }
@@ -391,7 +384,7 @@ static int m4u_fill_sgtable_user(struct vm_area_struct *vma, unsigned long va, i
 {
 	unsigned long va_align;
 	phys_addr_t pa;
-	int i;
+	int i, ret;
 	struct scatterlist *sg = *pSg;
 	struct page *page;
 
@@ -401,14 +394,27 @@ static int m4u_fill_sgtable_user(struct vm_area_struct *vma, unsigned long va, i
 		int fault_cnt;
 		unsigned long va_tmp = va_align + i * PAGE_SIZE;
 
+		pa = 0;
 		for (fault_cnt = 0; fault_cnt < 3000; fault_cnt++) {
-			pa = m4u_user_v2p(va_tmp);
-			if (!pa) {
-				handle_mm_fault(current->mm, vma, va_tmp,
-						(vma->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0);
-				cond_resched();
-			} else
+			if (has_page) {
+				int foll_flags = FOLL_TOUCH | FOLL_GET | FOLL_DURABLE;
+
+				if ((vma->vm_flags & VM_WRITE))
+					foll_flags |= FOLL_WRITE;
+				ret = __get_user_pages(current, current->mm, va_tmp, 1,
+					foll_flags, &page, NULL, NULL);
+				if (ret == 1)
+					pa = (page_to_pfn(page) << PAGE_SHIFT) | (va_tmp & ~PAGE_MASK);
+			} else {
+				pa = m4u_user_v2p(va_tmp);
+				if (!pa) {
+					handle_mm_fault(current->mm, vma, va_tmp,
+						(vma->vm_flags&VM_WRITE) ? FAULT_FLAG_WRITE : 0);
+				}
+			}
+			if (pa)
 				break;
+			cond_resched();
 		}
 
 		if (!pa || !sg) {
@@ -793,7 +799,14 @@ int m4u_dealloc_mva(m4u_client_t *client, M4U_PORT_ID port, unsigned int mva)
 		M4UMSG("m4u_unmap fail\n");
 	}
 
-	m4u_put_sgtable_pages(pMvaInfo->sg_table);
+	if (0 != pMvaInfo->va) {
+		/* non ion buffer*/
+		if (pMvaInfo->va < PAGE_OFFSET) {  /* from user space */
+			if (!(pMvaInfo->va >= VMALLOC_START && pMvaInfo->va <= VMALLOC_END)) { /* non vmalloc	 */
+				m4u_put_sgtable_pages(pMvaInfo->sg_table);
+			}
+		}
+	}
 
 	ret = m4u_do_mva_free(mva, pMvaInfo->size);
 	if (ret) {

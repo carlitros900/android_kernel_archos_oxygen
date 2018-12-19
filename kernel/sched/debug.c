@@ -1322,6 +1322,7 @@ void sysrq_sched_debug_show_at_AEE(void)
 		read_unlock_irqrestore(&tasklist_lock, flags);
 
 #ifdef CONFIG_MTPROF
+	/* sched:rt throttle monitor */
 	mt_rt_mon_print_task_from_buffer();
 #endif
 }

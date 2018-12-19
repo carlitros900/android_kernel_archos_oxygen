@@ -140,27 +140,43 @@ static DEFINE_MUTEX(akm09911_i2c_mutex);
 static int mag_i2c_read_block(struct i2c_client *client, u8 addr, u8 *data, u8 len)
 {
 	int err = 0;
-	u8 beg = addr;
+	u8 *beg;
+	u8 *buffer;
+	int i;
 	struct i2c_msg msgs[2] = { {0}, {0} };
 
 	mutex_lock(&akm09911_i2c_mutex);
+	buffer = kmalloc(len, GFP_KERNEL);
+	if(!buffer) {
+		err = -ENOMEM;
+		goto EXIT_FREE_BUFFER;
+	}
+	beg = kmalloc(len, GFP_KERNEL);
+	if(!beg) {
+		err = -ENOMEM;
+		goto EXIT_ERROR;
+	}
+	*beg = addr;
+
 	msgs[0].addr = client->addr;
 	msgs[0].flags = 0;
 	msgs[0].len = 1;
-	msgs[0].buf = &beg;
+	msgs[0].buf = beg;
 
 	msgs[1].addr = client->addr;
 	msgs[1].flags = I2C_M_RD;
 	msgs[1].len = len;
-	msgs[1].buf = data;
+	msgs[1].buf = buffer;
 
 	if (!client) {
 		mutex_unlock(&akm09911_i2c_mutex);
-		return -EINVAL;
+		err = -EINVAL;
+		goto EXIT_ERROR;
 	} else if (len > C_I2C_FIFO_SIZE) {
 		mutex_unlock(&akm09911_i2c_mutex);
 		MAGN_ERR(" length %d exceeds %d\n", len, C_I2C_FIFO_SIZE);
-		return -EINVAL;
+		err = -EINVAL;
+		goto EXIT_ERROR;
 	}
 
 	err = i2c_transfer(client->adapter, msgs, sizeof(msgs) / sizeof(msgs[0]));
@@ -170,7 +186,13 @@ static int mag_i2c_read_block(struct i2c_client *client, u8 addr, u8 *data, u8 l
 	} else {
 		err = 0;
 	}
+	for(i=0; i < len; i++)
+		*(data + i) = *(buffer + i);
 	mutex_unlock(&akm09911_i2c_mutex);
+EXIT_ERROR:
+	kfree(beg);
+EXIT_FREE_BUFFER:
+	kfree(buffer);
 	return err;
 
 }
@@ -178,7 +200,8 @@ static int mag_i2c_read_block(struct i2c_client *client, u8 addr, u8 *data, u8 l
 static int mag_i2c_write_block(struct i2c_client *client, u8 addr, u8 *data, u8 len)
 {				/*because address also occupies one byte, the maximum length for write is 7 bytes */
 	int err = 0, idx = 0, num = 0;
-	char buf[C_I2C_FIFO_SIZE];
+	/*char buf[C_I2C_FIFO_SIZE];*/
+	char *buf;
 
 	err = 0;
 	mutex_lock(&akm09911_i2c_mutex);
@@ -192,6 +215,11 @@ static int mag_i2c_write_block(struct i2c_client *client, u8 addr, u8 *data, u8 
 	}
 
 	num = 0;
+	buf = kmalloc(len, GFP_KERNEL);
+	if(!buf) {
+		kfree(buf);
+		return -ENOMEM;
+	}
 	buf[num++] = addr;
 	for (idx = 0; idx < len; idx++)
 		buf[num++] = data[idx];
@@ -200,8 +228,10 @@ static int mag_i2c_write_block(struct i2c_client *client, u8 addr, u8 *data, u8 
 	if (err < 0) {
 		mutex_unlock(&akm09911_i2c_mutex);
 		MAGN_ERR("send command error!!\n");
+		kfree(buf);
 		return -EFAULT;
 	}
+	kfree(buf);
 	mutex_unlock(&akm09911_i2c_mutex);
 	return err;
 }

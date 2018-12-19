@@ -22,7 +22,7 @@
 
 #define FGD_NL_MSG_T_HDR_LEN 12
 #define FGD_NL_MSG_MAX_LEN 9200
-#define FIXED_TBAT_25
+
 struct fgd_nl_msg_t {
 	unsigned int fgd_cmd;
 	unsigned int fgd_data_len;
@@ -108,6 +108,7 @@ struct battery_meter_custom_data {
 	int r_fg_board_base;
 	int r_fg_board_slope;
 	int car_tune_value;
+	int system_off_voltage;/*start-160325-xmyyq-add system_off_voltage in battery_meter_custom_data*/
 
 	/* HW Fuel gague  */
 	int current_detect_r_fg;
@@ -355,7 +356,6 @@ extern signed int battery_meter_reset(void);
 extern signed int battery_meter_sync(signed int bat_i_sense_offset);
 
 extern signed int battery_meter_get_battery_zcv(void);
-extern signed int battery_meter_get_battery_vol(void);
 extern signed int battery_meter_get_battery_nPercent_zcv(void);	/* 15% zcv,  15% can be customized */
 extern signed int battery_meter_get_battery_nPercent_UI_SOC(void);	/* tracking point */
 

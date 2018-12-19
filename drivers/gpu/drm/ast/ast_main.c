@@ -223,11 +223,12 @@ static int ast_get_dram_info(struct drm_device *dev)
 	ast_write32(ast, 0x10000, 0xfc600309);
 
 	do {
-		;
+		if (pci_channel_offline(dev->pdev))
+			return -EIO;
 	} while (ast_read32(ast, 0x10000) != 0x01);
 	data = ast_read32(ast, 0x10004);
 
-	if (data & 0x400)
+	if (data & 0x40)
 		ast->dram_bus_width = 16;
 	else
 		ast->dram_bus_width = 32;
@@ -429,7 +430,9 @@ int ast_driver_load(struct drm_device *dev, unsigned long flags)
 	ast_detect_chip(dev, &need_post);
 
 	if (ast->chip != AST1180) {
-		ast_get_dram_info(dev);
+		ret = ast_get_dram_info(dev);
+		if (ret)
+			goto out_free;
 		ast->vram_size = ast_get_vram_info(dev);
 		DRM_INFO("dram %d %d %d %08x\n", ast->mclk, ast->dram_type, ast->dram_bus_width, ast->vram_size);
 	}
@@ -486,7 +489,8 @@ int ast_driver_unload(struct drm_device *dev)
 	drm_mode_config_cleanup(dev);
 
 	ast_mm_fini(ast);
-	pci_iounmap(dev->pdev, ast->ioregs);
+	if (ast->ioregs != ast->regs + AST_IO_MM_OFFSET)
+		pci_iounmap(dev->pdev, ast->ioregs);
 	pci_iounmap(dev->pdev, ast->regs);
 	kfree(ast);
 	return 0;

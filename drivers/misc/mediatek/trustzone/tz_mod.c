@@ -8,6 +8,7 @@
 #include <linux/cma.h>
 #include <linux/mm.h>
 #include <linux/slab.h>
+#include <linux/swap.h>
 #include <linux/io.h>
 #include <linux/uaccess.h>
 #include <linux/ioctl.h>
@@ -43,9 +44,6 @@
 #define PAGE_SHIFT 12		/* fix me!!!! need global define */
 
 #define TZ_DEVNAME "mtk_tz"
-
-/* FIXME: remove below definition when cma works well */
-/* #define NO_CMA_RELEASE_THROUGH_SHRINKER_FOR_EARLY_STAGE */
 
 /**Used for mapping user space address to physical memory
 */
@@ -215,10 +213,13 @@ static long _map_user_pages(struct MTIOMMU_PIN_RANGE_T *pinRange,
 		goto out;
 	}
 	if (!(vma->vm_flags & (VM_IO | VM_PFNMAP))) {
+		int foll_flags = FOLL_TOUCH | FOLL_GET | FOLL_DURABLE;
+
 		pinRange->isPage = 1;
-		res = get_user_pages(current, current->mm, uaddr, nr_pages,
-					write, 0,/* don't force */
-					pages, NULL);
+		if (write)
+			foll_flags |= FOLL_WRITE;
+		res = __get_user_pages(current, current->mm, uaddr, nr_pages,
+					foll_flags, pages, NULL, NULL);
 	} else {
 		/* pfn mapped memory, don't touch page struct.
 		   the buffer manager (possibly ion) should make sure
@@ -1193,6 +1194,93 @@ static struct cma *tz_cma;
 static struct page *secure_pages;
 static size_t secure_size;
 
+#define MAX_SHRINK_PAGES  ((unsigned long)40*1024*1024/4096)
+
+/*
+ * Make sure we have at least @pages of free memory
+ * return number of pages freed
+ */
+static unsigned long try_shrink_memory(unsigned long pages)
+{
+	unsigned long free = nr_free_pages(), tfree = 0, ofree, alloc;
+	int max_retries;
+	unsigned long start, end;
+
+	start = sched_clock();
+
+	ofree = free;
+	max_retries = pages / MAX_SHRINK_PAGES + 5;
+	while (pages > free && max_retries--) {
+		/*
+		 * When shrinking large numbers of pages at once, vmscan
+		 * tends to free too much pages and using lots of time.
+		 *
+		 * Only shrink a maximum number of page at a time.
+		 */
+		alloc = min(MAX_SHRINK_PAGES, pages - free);
+		tfree += shrink_all_memory(alloc);
+		free = nr_free_pages();
+	}
+
+	end = sched_clock();
+	pr_info("%s: free pages %lu, current free %lu, takes %lu us\n",
+		__func__, tfree, nr_free_pages(), end-start);
+
+	return tfree;
+}
+
+/*
+ * Allocate large chunk of memory from the cma zone.
+ *
+ * Normal cma_alloc will easily to fail and/or take lots of time when user
+ * is trying to allocate large chunk of memory from it. Add helper function
+ * to improve this usage.
+ *
+ * return first page of allocated memory.
+ */
+static struct page *cma_alloc_large(struct cma *cma, int count, unsigned int align)
+{
+	struct page *page;
+	struct zone *zone;
+	unsigned long wmark_low = 0;
+	int retries = 0, org_swappiness;
+
+	/*
+	 * We are going to make lots of free spaces. Pages swap out during
+	 * the process might be freed soon. Temporary set swappiness to 0 to
+	 * reduce this waste and accelerate freeing.
+	 */
+	org_swappiness = vm_swappiness;
+	vm_swappiness = 0;
+
+	for_each_zone(zone)
+		wmark_low += zone->watermark[WMARK_LOW];
+
+	/*
+	 * Make sure we have enough free memory to fullfil this request.
+	 *
+	 * This helps to trigger memory shrinker faster and make sure cma_alloc
+	 * below will success.
+	 * Without this, pages migrate out from CMA ares might be freed when
+	 * CMA tries to make room to migrate more pages. This also reduces
+	 * pages CMA need to handle by freeing them first.
+	 *
+	 * Kernel will start memory reclaim when free memory is lower than
+	 * low watermark. To avoid this while we do cma_alloc, we should make
+	 * sure free memory is more than count + wmark_low
+	 */
+	try_shrink_memory(count + wmark_low);
+
+	for (retries = 0; retries < 3; retries++) {
+		page = cma_alloc(cma, count, align);
+		if (page)
+			break;
+	}
+
+	vm_swappiness = org_swappiness;
+	return page;
+}
+
 /* TEE chunk memory allocate by REE service
 */
 TZ_RESULT KREE_ServGetChunkmemPool(u32 op,
@@ -1209,9 +1297,9 @@ TZ_RESULT KREE_ServGetChunkmemPool(u32 op,
 	}
 
 	secure_size = cma_get_size(tz_cma);
-	secure_pages = cma_alloc(tz_cma, secure_size / SZ_4K, SZ_1M);
+	secure_pages = cma_alloc_large(tz_cma, secure_size / SZ_4K, get_order(SZ_1M));
 	if (secure_pages == NULL) {
-		pr_warn("cma_alloc() failed!\n");
+		pr_warn("%s() cma_alloc() failed!\n", __func__);
 		return TZ_RESULT_ERROR_OUT_OF_MEMORY;
 	}
 	chunkmem->size = secure_size;
@@ -1219,6 +1307,9 @@ TZ_RESULT KREE_ServGetChunkmemPool(u32 op,
 
 	pr_warn("%s() get @%llx [0x%zx]\n", __func__,
 			chunkmem->chunkmem_pa, secure_size);
+
+	/* flush cache to avoid writing secure memory after allocation. */
+	flush_cache_all();
 
 	return TZ_RESULT_SUCCESS;
 }
@@ -1237,6 +1328,8 @@ TZ_RESULT KREE_ServReleaseChunkmemPool(u32 op,
 	}
 	return TZ_RESULT_ERROR_GENERIC;
 }
+
+#ifndef NO_CMA_RELEASE_THROUGH_SHRINKER_FOR_EARLY_STAGE
 
 TZ_RESULT KREE_TeeReleseChunkmemPool(void)
 {
@@ -1281,11 +1374,44 @@ int tz_cm_shrinker_thread(void *data)
 	}while(1);
 }
 
-#ifndef NO_CMA_RELEASE_THROUGH_SHRINKER_FOR_EARLY_STAGE
+static TZ_RESULT KREE_IsTeeChunkmemPoolReleasable(int *releasable)
+{
+	TZ_RESULT ret;
+	KREE_SESSION_HANDLE mem_session;
+	MTEEC_PARAM param[4];
+
+	if (releasable == NULL)
+		return TZ_RESULT_ERROR_BAD_FORMAT;
+
+	ret = KREE_CreateSession(TZ_TA_MEM_UUID, &mem_session);
+	if (ret != TZ_RESULT_SUCCESS) {
+		pr_warn("Create memory session error %d\n", ret);
+		return ret;
+	}
+
+	ret = KREE_TeeServiceCall(mem_session, TZCMD_MEM_USAGE_SECURECM,
+					TZPT_VALUE_OUTPUT, param);
+	if (ret != TZ_RESULT_SUCCESS) {
+		pr_warn("Is Secure CM releasable failed, ret = %d\n", ret);
+	}
+	*releasable = param[0].value.a;
+
+	KREE_CloseSession(mem_session);
+
+	return ret;;
+}
+
 static unsigned long tz_cm_count(struct shrinker *s,
 						struct shrink_control *sc)
 {
-	if(secure_pages == NULL)
+	int releasable;
+	if (secure_pages == NULL)
+		return 0;
+
+	if (TZ_RESULT_SUCCESS != KREE_IsTeeChunkmemPoolReleasable(&releasable))
+		return 0;
+
+	if (releasable == 0)
 		return 0;
 
 	return secure_size / SZ_4K;

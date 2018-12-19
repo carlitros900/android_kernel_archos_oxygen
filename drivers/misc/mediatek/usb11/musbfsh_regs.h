@@ -85,6 +85,7 @@
 #define MUSBFSH_ULPI_REG_REQ	(1 << 0)
 #define MUSBFSH_ULPI_REG_CMPLT	(1 << 1)
 #define MUSBFSH_ULPI_RDN_WR	(1 << 2)
+#define MUSBFSH_ULPI_REG_DATA	0x74	/* 8 bit */
 
 /* TESTMODE */
 #define MUSBFSH_TEST_FORCE_HOST	0x80
@@ -250,8 +251,6 @@
 #define MUSBFSH_RXFIFOSZ	0x63	/* 8-bit (see masks) */
 #define MUSBFSH_TXFIFOADD	0x64	/* 16-bit offset shifted right 3 */
 #define MUSBFSH_RXFIFOADD	0x66	/* 16-bit offset shifted right 3 */
-
-#define MUSBFSH_ULPI_REG_DATA   0x74
 
 #define MUSBFSH_EPINFO		0x78	/* 8 bit */
 #define MUSBFSH_RAMINFO		0x79	/* 8 bit */
