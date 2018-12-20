@@ -82,12 +82,22 @@
 #if defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
 #include <mach/mt_pe.h>
 #endif
+
+#ifdef CONFIG_BATTERY_THERMAL_CHECK_POWER_ON
+#include <linux/syscalls.h>
+#include <linux/time.h>
+#endif
+
+/* add wwj */
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+#include <mach/bq27520.h>
+#endif
+/* end wwj */
+
 /* ////////////////////////////////////////////////////////////////////////////// */
 /* Battery Logging Entry */
 /* ////////////////////////////////////////////////////////////////////////////// */
 int Enable_BATDRV_LOG = BAT_LOG_CRTI;
-/* static struct proc_dir_entry *proc_entry; */
-char proc_bat_data[32];
 
 /* ///////////////////////////////////////////////////////////////////////////////////////// */
 /* // Smart Battery Structure */
@@ -123,6 +133,11 @@ int battery_cmd_thermal_test_mode_value = 0;
 int g_battery_tt_check_flag = 0;
 /* 0:default enable check batteryTT, 1:default disable check batteryTT */
 
+/* add wwj */
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+extern int hardware_version;
+#endif
+/* end wwj */
 
 /*
  *  Global Variable
@@ -138,6 +153,8 @@ unsigned int g_call_state = CALL_IDLE;
 kal_bool g_charging_full_reset_bat_meter = KAL_FALSE;
 int g_platform_boot_mode = 0;
 struct timespec g_bat_time_before_sleep;
+struct timespec bat_time_last_update;
+bool UI_SOC_updated = false;
 int g_smartbook_update = 0;
 
 #if defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
@@ -148,6 +165,11 @@ kal_bool skip_battery_update = KAL_FALSE;
 
 unsigned int g_batt_temp_status = TEMP_POS_NORMAL;
 
+//start-xmyyq-20160503-add bq customer battery notify
+#if defined(BATTERY_NOTIFY_CASE_0006_VRECHARGER)
+static int notify_temp_flag = 0;
+#endif
+//end-xmyyq-20160503-add bq customer battery notify
 
 kal_bool battery_suspended = KAL_FALSE;
 /*#ifdef MTK_ENABLE_AGING_ALGORITHM
@@ -257,6 +279,9 @@ struct battery_data {
 	int BAT_PRESENT;
 	int BAT_TECHNOLOGY;
 	int BAT_CAPACITY;
+	/*start-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
+	int BAT_CURRENT;
+	/*end-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
 	/* Add for Battery Service */
 	int BAT_batt_vol;
 	int BAT_batt_temp;
@@ -293,6 +318,9 @@ static enum power_supply_property battery_props[] = {
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_CAPACITY,
+	/*start-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	/*end-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
 	/* Add for Battery Service */
 	POWER_SUPPLY_PROP_batt_vol,
 	POWER_SUPPLY_PROP_batt_temp,
@@ -311,6 +339,49 @@ static enum power_supply_property battery_props[] = {
 	/* ADB CMD Discharging */
 	POWER_SUPPLY_PROP_adjust_power,
 };
+
+#ifdef CONFIG_BATTERY_THERMAL_CHECK_POWER_ON
+#define MISC_FILENAME "/dev/block/platform/mtk-msdc.0/11230000.MSDC0/by-name/custram"
+typedef struct{
+       char bat_state[32];
+       char cpu_state[32];
+       unsigned long time_shutdown;
+}thermal_check_state;
+thermal_check_state thermal_hot_state;
+thermal_check_state *pthermal_hot_state = &thermal_hot_state;
+static int save_thermal_flag = 1;
+
+int  save_thermal_status(int state)
+{
+       int ret = 0;
+       long fd;
+       struct timespec time_now;
+       fd = sys_open(MISC_FILENAME,O_RDWR,0);
+       if(fd < 0){
+               printk("Open /dev/block/platform/mtk-msdc.0/11230000.MSDC0/by-name/custram failed\n");
+               ret = 0;
+       }else{
+               if(0 == state){
+                       strcpy(thermal_hot_state.bat_state,"bat_cool");
+                       strcpy(thermal_hot_state.cpu_state,"cpu_cool");
+               }else if(1 == state){
+                       strcpy(thermal_hot_state.bat_state,"bat_hot");
+               }else if(2 == state){
+                       strcpy(thermal_hot_state.cpu_state,"cpu_hot");
+               }
+               time_now = current_kernel_time();
+               thermal_hot_state.time_shutdown = time_now.tv_sec;
+
+               sys_lseek(fd, 2048*3, SEEK_SET);
+
+               ret = sys_write(fd, (char __user *)pthermal_hot_state,sizeof(thermal_hot_state));
+
+               battery_xlog_printk(BAT_LOG_CRTI, "Battery thermal status is %s\n", thermal_hot_state.bat_state);
+               sys_close(fd);
+       }
+       return ret;
+}
+#endif
 
 /*void check_battery_exist(void);*/
 void charging_suspend_enable(void)
@@ -443,15 +514,17 @@ EXPORT_SYMBOL(wake_up_bat2);
 
 static ssize_t bat_log_write(struct file *filp, const char __user *buff, size_t len, loff_t *data)
 {
-	if (copy_from_user(&proc_bat_data, buff, len)) {
+	char proc_bat_data;
+
+	if ((len <= 0) || copy_from_user(&proc_bat_data, buff, 1)) {
 		battery_log(BAT_LOG_FULL, "bat_log_write error.\n");
 		return -EFAULT;
 	}
 
-	if (proc_bat_data[0] == '1') {
+	if (proc_bat_data == '1') {
 		battery_log(BAT_LOG_CRTI, "enable battery driver log system\n");
 		Enable_BATDRV_LOG = 1;
-	} else if (proc_bat_data[0] == '2') {
+	} else if (proc_bat_data == '2') {
 		battery_log(BAT_LOG_CRTI, "enable battery driver log system:2\n");
 		Enable_BATDRV_LOG = 2;
 	} else {
@@ -549,11 +622,6 @@ static int usb_get_property(struct power_supply *psy,
 	}
 	return ret;
 }
-//extern int cw2015_get_capacity(void);
-//extern int cw2015_get_voltage(void);
-extern int g_cw2015_capacity ;
-extern int g_cw2015_vol ;
-extern int cw2015_read_temp(void);
 
 static int battery_get_property(struct power_supply *psy,
 				enum power_supply_property psp, union power_supply_propval *val)
@@ -576,15 +644,16 @@ static int battery_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = data->BAT_CAPACITY;
-		//val->intval =g_cw2015_capacity;//cw2015_get_capacity();
-		//if(val->intval ==0 && BMT_status.charger_exist==KAL_TRUE) val->intval =1;
 		break;
+        /*start-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		val->intval = data->BAT_CURRENT;
+		break;
+        /*end-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
 	case POWER_SUPPLY_PROP_batt_vol:
 		val->intval = data->BAT_batt_vol;
-		//val->intval =g_cw2015_vol;// cw2015_get_voltage();
 		break;
 	case POWER_SUPPLY_PROP_batt_temp:
-		//val->intval = cw2015_read_temp();//data->BAT_batt_temp;
 		val->intval = data->BAT_batt_temp;
 		break;
 	case POWER_SUPPLY_PROP_TemperatureR:
@@ -1619,10 +1688,6 @@ static DEVICE_ATTR(Pump_Express, 0664, show_Pump_Express, store_Pump_Express);
 static void mt_battery_update_EM(struct battery_data *bat_data)
 {
 	bat_data->BAT_CAPACITY = BMT_status.UI_SOC;
-
-	//-------------add lifei---------------------
-	if(BMT_status.charger_exist == KAL_TRUE  && BMT_status.UI_SOC ==0)bat_data->BAT_CAPACITY =1;
-	//----------------------------------------		
 	bat_data->BAT_TemperatureR = BMT_status.temperatureR;	/* API */
 	bat_data->BAT_TempBattVoltage = BMT_status.temperatureV;	/* API */
 	bat_data->BAT_InstatVolt = BMT_status.bat_vol;	/* VBAT */
@@ -1630,6 +1695,9 @@ static void mt_battery_update_EM(struct battery_data *bat_data)
 	bat_data->BAT_BatterySenseVoltage = BMT_status.bat_vol;
 	bat_data->BAT_ISenseVoltage = BMT_status.Vsense;	/* API */
 	bat_data->BAT_ChargerVoltage = BMT_status.charger_vol;
+	/*start-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
+	bat_data->BAT_CURRENT=BMT_status.IBattery;
+	/*end-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
 	/* Dual battery */
 	bat_data->status_smb = g_status_smb;
 	bat_data->capacity_smb = g_capacity_smb;
@@ -1692,8 +1760,6 @@ static kal_bool mt_battery_100Percent_tracking_check(void)
 				BMT_status.UI_SOC++;
 			} else {
 				timer_counter++;
-
-				return resetBatteryMeter;
 			}
 
 			resetBatteryMeter = KAL_TRUE;
@@ -1741,6 +1807,7 @@ static kal_bool mt_battery_nPercent_tracking_check(void)
 		if (timer_counter == (batt_cust_data.npercent_tracking_time / BAT_TASK_PERIOD)) {
 			/* every x sec decrease UI percentage */
 			BMT_status.UI_SOC--;
+			get_monotonic_boottime(&bat_time_last_update);
 			timer_counter = 1;
 		} else {
 			timer_counter++;
@@ -1778,16 +1845,21 @@ static kal_bool mt_battery_0Percent_tracking_check(void)
 	if (BMT_status.UI_SOC <= 0) {
 		BMT_status.UI_SOC = 0;
 	} else {
-		if (BMT_status.bat_vol > SYSTEM_OFF_VOLTAGE && BMT_status.UI_SOC > 1)
+		/*start-160325-xmyyq-add system_off_voltage in battery_custom_data*/
+		if(batt_cust_data.system_off_voltage == 0)
+			batt_cust_data.system_off_voltage = SYSTEM_OFF_VOLTAGE;
+		if (BMT_status.bat_vol > batt_cust_data.system_off_voltage && BMT_status.UI_SOC > 1) {
 			BMT_status.UI_SOC--;
-		else if (BMT_status.bat_vol <= SYSTEM_OFF_VOLTAGE)
+			get_monotonic_boottime(&bat_time_last_update);
+		} else if (BMT_status.bat_vol <= batt_cust_data.system_off_voltage) {
 			BMT_status.UI_SOC--;
-
+			get_monotonic_boottime(&bat_time_last_update);
+		}
 	}
 
-	battery_log(BAT_LOG_CRTI, "0Percent, VBAT < %d UI_SOC=%d\r\n", SYSTEM_OFF_VOLTAGE,
+	battery_log(BAT_LOG_CRTI, "0Percent, VBAT < %d UI_SOC=%d\r\n", batt_cust_data.system_off_voltage,
 		    BMT_status.UI_SOC);
-
+	/*end-160325-xmyyq-add system_off_voltage in battery_custom_data*/
 	return resetBatteryMeter;
 }
 
@@ -1795,6 +1867,12 @@ static kal_bool mt_battery_0Percent_tracking_check(void)
 static void mt_battery_Sync_UI_Percentage_to_Real(void)
 {
 	static unsigned int timer_counter;
+/* add wwj */
+#ifdef SOC_BY_EXT_HW_FG
+	static unsigned int charging_timer;
+	static int real_soc_flag = 0;
+#endif
+/* end wwj */
 
 	if ((BMT_status.UI_SOC > BMT_status.SOC) && ((BMT_status.UI_SOC != 1))) {
 #if !defined(SYNC_UI_SOC_IMM)
@@ -1803,6 +1881,7 @@ static void mt_battery_Sync_UI_Percentage_to_Real(void)
 			if (timer_counter ==
 			    (batt_cust_data.sync_to_real_tracking_time / BAT_TASK_PERIOD)) {
 				BMT_status.UI_SOC--;
+				get_monotonic_boottime(&bat_time_last_update);
 				timer_counter = 0;
 			}
 #ifdef FG_BAT_INT
@@ -1821,12 +1900,55 @@ static void mt_battery_Sync_UI_Percentage_to_Real(void)
 		BMT_status.UI_SOC--;
 #endif
 		battery_log(BAT_LOG_CRTI, "[Sync_Real] UI_SOC=%d, SOC=%d, counter = %d\n",
-			    BMT_status.UI_SOC, BMT_status.SOC, timer_counter);
-	} else {
+			    BMT_status.UI_SOC, BMT_status.SOC, timer_counter);	
+/* add wwj */
+     }
+#ifdef SOC_BY_EXT_HW_FG
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+        else if((BMT_status.SOC - BMT_status.UI_SOC >= 2) && (1 == real_soc_flag) && (MATCH_BQ27520_HARDWARE_VERSION == hardware_version)){
+#else
+        else if((BMT_status.SOC - BMT_status.UI_SOC >= 2) && (1 == real_soc_flag)){
+#endif
+            if(charging_timer >= (SYNC_TO_REAL_TRACKING_TIME / BAT_TASK_PERIOD)){
+                BMT_status.UI_SOC++;
+                charging_timer = 0;
+            }else{
+                charging_timer++;
+            }
+        }
+#endif				
+	else {
 		timer_counter = 0;
+#ifdef SOC_BY_EXT_HW_FG
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+		if(hardware_version == MATCH_BQ27520_HARDWARE_VERSION){
+			charging_timer = 0;
+			real_soc_flag = 1;
+		}
+#else
+		charging_timer = 0;
+		real_soc_flag = 1;
+#endif
+#endif
+/* end wwj */
 
 #if !defined(CUST_CAPACITY_OCV2CV_TRANSFORM)
-		BMT_status.UI_SOC = BMT_status.SOC;
+
+		if (MATCH_BQ27520_HARDWARE_VERSION != hardware_version) {
+			if (!UI_SOC_updated && BMT_status.UI_SOC != BMT_status.SOC) {
+				get_monotonic_boottime(&bat_time_last_update);
+				BMT_status.UI_SOC = BMT_status.SOC;
+			}
+			if ((BMT_status.charger_exist &&
+				BMT_status.bat_charging_state != CHR_ERROR) &&
+				BMT_status.SOC > BMT_status.UI_SOC) {
+				get_monotonic_boottime(&bat_time_last_update);
+				BMT_status.UI_SOC++;
+			}
+		} else {
+			get_monotonic_boottime(&bat_time_last_update);
+			BMT_status.UI_SOC = BMT_status.SOC;
+		}
 #else
 		if (BMT_status.UI_SOC == -1)
 			BMT_status.UI_SOC = BMT_status.SOC;
@@ -1840,11 +1962,22 @@ static void mt_battery_Sync_UI_Percentage_to_Real(void)
 #endif
 	}
 
+#ifndef SOC_BY_EXT_HW_FG
 	if (BMT_status.UI_SOC <= 0) {
 		BMT_status.UI_SOC = 1;
 		battery_log(BAT_LOG_CRTI, "[Battery]UI_SOC get 0 first (%d)\r\n",
 			    BMT_status.UI_SOC);
 	}
+#else
+	if(MATCH_BQ27520_HARDWARE_VERSION != hardware_version) {
+		if (BMT_status.UI_SOC <= 0) {
+		    BMT_status.UI_SOC = 1;
+		    battery_log(BAT_LOG_CRTI, "[Battery]UI_SOC get 0 first (%d)\r\n",
+		                BMT_status.UI_SOC);
+		}
+	}
+#endif
+
 }
 
 static void battery_update(struct battery_data *bat_data)
@@ -1860,12 +1993,27 @@ static void battery_update(struct battery_data *bat_data)
 
 	if ((BMT_status.charger_exist == KAL_TRUE) && (BMT_status.bat_charging_state != CHR_ERROR)) {
 		if (BMT_status.bat_exist) {	/* charging */
+               #if defined(SOC_BY_EXT_HW_FG)
+			   #if defined(CONFIG_MALATA_HARDWARE_VERSION)
+			   if(hardware_version == MATCH_BQ27520_HARDWARE_VERSION){
+				      resetBatteryMeter = mt_battery_100Percent_tracking_check();
+			    }else{
+				      if (BMT_status.bat_vol <= batt_cust_data.v_0percent_tracking) {
+					     resetBatteryMeter = mt_battery_0Percent_tracking_check();
+				      } else {
+					    resetBatteryMeter = mt_battery_100Percent_tracking_check();
+				      }
+			    }
+            #else
+			 resetBatteryMeter = mt_battery_100Percent_tracking_check();
+            #endif
+            #else
 			if (BMT_status.bat_vol <= batt_cust_data.v_0percent_tracking)
 				resetBatteryMeter = mt_battery_0Percent_tracking_check();
 			else
 				resetBatteryMeter = mt_battery_100Percent_tracking_check();
 
-
+            #endif
 			bat_data->BAT_STATUS = POWER_SUPPLY_STATUS_CHARGING;
 		} else {	/* No Battery, Only Charger */
 
@@ -1876,10 +2024,25 @@ static void battery_update(struct battery_data *bat_data)
 	} else {		/* Only Battery */
 
 		bat_data->BAT_STATUS = POWER_SUPPLY_STATUS_NOT_CHARGING;
+        #if defined(SOC_BY_EXT_HW_FG)
+		#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+		if(hardware_version == MATCH_BQ27520_HARDWARE_VERSION){
+			resetBatteryMeter = mt_battery_nPercent_tracking_check();
+		}else{
+			if (BMT_status.bat_vol <= batt_cust_data.v_0percent_tracking)
+				resetBatteryMeter = mt_battery_0Percent_tracking_check();
+			else
+				resetBatteryMeter = mt_battery_nPercent_tracking_check();
+		}
+		#else
+		resetBatteryMeter = mt_battery_nPercent_tracking_check();
+		#endif
+		#else
 		if (BMT_status.bat_vol <= batt_cust_data.v_0percent_tracking)
 			resetBatteryMeter = mt_battery_0Percent_tracking_check();
 		else
 			resetBatteryMeter = mt_battery_nPercent_tracking_check();
+        #endif
 	}
 
 	if (resetBatteryMeter == KAL_TRUE) {
@@ -1989,20 +2152,20 @@ static void ac_update(struct ac_data *ac_data)
 	struct power_supply *ac_psy = &ac_data->psy;
 
 	if (BMT_status.charger_exist == KAL_TRUE) {
+/*start-160325-xmyyq-sync android5.0 modification*/
 #if !defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
-		if ((BMT_status.charger_type == NONSTANDARD_CHARGER) ||
-		    (BMT_status.charger_type == STANDARD_CHARGER) ||
+		if ((BMT_status.charger_type == STANDARD_CHARGER) ||
 		    (BMT_status.charger_type == APPLE_2_1A_CHARGER) ||
 		    (BMT_status.charger_type == APPLE_1_0A_CHARGER) ||
 		    (BMT_status.charger_type == APPLE_0_5A_CHARGER)) {
 #else
-		if ((BMT_status.charger_type == NONSTANDARD_CHARGER) ||
-		    (BMT_status.charger_type == STANDARD_CHARGER) ||
+		if ((BMT_status.charger_type == STANDARD_CHARGER) ||
 		    (BMT_status.charger_type == APPLE_2_1A_CHARGER) ||
 		    (BMT_status.charger_type == APPLE_1_0A_CHARGER) ||
 		    (BMT_status.charger_type == APPLE_0_5A_CHARGER) ||
 		    (DISO_data.diso_state.cur_vdc_state == DISO_ONLINE)) {
 #endif
+/*end-160325-xmyyq-sync android5.0 modification*/
 			ac_data->AC_ONLINE = 1;
 			ac_psy->type = POWER_SUPPLY_TYPE_MAINS;
 		} else {
@@ -2024,8 +2187,10 @@ static void usb_update(struct usb_data *usb_data)
 	struct power_supply *usb_psy = &usb_data->psy;
 
 	if (BMT_status.charger_exist == KAL_TRUE) {
-		if ((BMT_status.charger_type == STANDARD_HOST) ||
+		/*start-160325-xmyyq-sync android5.0 modification*/
+		if ((BMT_status.charger_type == NONSTANDARD_CHARGER) || (BMT_status.charger_type == STANDARD_HOST) ||
 		    (BMT_status.charger_type == CHARGING_HOST)) {
+		/*end-160325-xmyyq-sync android5.0 modification*/
 			usb_data->USB_ONLINE = 1;
 			usb_psy->type = POWER_SUPPLY_TYPE_USB;
 		} else {
@@ -2110,8 +2275,6 @@ PMU_STATUS do_batt_temp_state_machine(void)
 {
 	if (BMT_status.temperature == batt_cust_data.err_charge_temperature)
 		return PMU_STATUS_FAIL;
-
-
 
 	if (batt_cust_data.bat_low_temp_protect_enable) {
 		if (BMT_status.temperature < batt_cust_data.min_charge_temperature) {
@@ -2296,6 +2459,14 @@ void mt_battery_GetBatteryData(void)
 	temperatureV = battery_meter_get_tempV();
 	temperatureR = battery_meter_get_tempR(temperatureV);
 
+	/*start-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
+#if defined(SOC_BY_SW_FG)
+	BMT_status.IBattery = battery_meter_get_battery_current() * 100 * (-1);
+#elif defined(SOC_BY_EXT_HW_FG)
+	BMT_status.IBattery = battery_meter_get_battery_current() * 100;
+#endif
+	/*end-160406-xmyyq-add POWER_SUPPLY_PROP_CURRENT_NOW property*/
+
 	if (bat_meter_timeout == KAL_TRUE || bat_spm_timeout == TRUE || fg_wake_up_bat == KAL_TRUE) {
 		SOC = battery_meter_get_battery_percentage();
 		/* if (bat_spm_timeout == true) */
@@ -2396,14 +2567,14 @@ static PMU_STATUS mt_battery_CheckBatteryTemp(void)
 		}
 	} else {
 #ifdef BAT_LOW_TEMP_PROTECT_ENABLE
-		if ((BMT_status.temperature < MIN_CHARGE_TEMPERATURE)
-		    || (BMT_status.temperature == ERR_CHARGE_TEMPERATURE)) {
+		if ((BMT_status.temperature < batt_cust_data.min_charge_temperature)
+		    || (BMT_status.temperature == ERR_CHARGE_TEMPERATURE)) {//modify yyq
 			battery_log(BAT_LOG_CRTI,
 				    "[BATTERY] Battery Under Temperature or NTC fail !!\n\r");
 			status = PMU_STATUS_FAIL;
 		}
 #endif
-		if (BMT_status.temperature >= MAX_CHARGE_TEMPERATURE) {
+		if (BMT_status.temperature >= batt_cust_data.max_charge_temperature) {//add yyq
 			battery_log(BAT_LOG_CRTI, "[BATTERY] Battery Over Temperature !!\n\r");
 			status = PMU_STATUS_FAIL;
 		}
@@ -2581,16 +2752,35 @@ static void mt_battery_notify_ICharging_check(void)
 #endif
 }
 
-
 static void mt_battery_notify_VBatTemp_check(void)
 {
 #if defined(BATTERY_NOTIFY_CASE_0002_VBATTEMP)
-
+//start-xmyyq-20160503-add bq customer battery notify
+#ifdef BATTERY_NOTIFY_VBATTEMP_FOR_BQ
+	if ((BMT_status.temperature >= 43) && ( BMT_status.charger_exist == KAL_TRUE )) {
+#else
 	if (BMT_status.temperature >= batt_cust_data.max_charge_temperature) {
+#endif//end-xmyyq-20160503-add bq customer battery notify
 		g_BatteryNotifyCode |= 0x0002;
+//start-xmyyq-20160503-add bq customer battery notify
+#if defined(BATTERY_NOTIFY_CASE_0006_VRECHARGER)
+		notify_temp_flag = 1;
+#endif
+//end-xmyyq-20160503-add bq customer battery notify
+
 		battery_log(BAT_LOG_CRTI, "[BATTERY] bat_temp(%d) out of range(too high)\n",
 			    BMT_status.temperature);
 	}
+
+//start-xmyyq-20160503-add bq customer battery notify
+#if defined(BATTERY_NOTIFY_CASE_0006_VRECHARGER)
+	if((1 == notify_temp_flag) && (BMT_status.temperature < MAX_CHARGE_TEMPERATURE_MINUS_X_DEGREE) && ( BMT_status.charger_exist == KAL_TRUE )){
+		g_BatteryNotifyCode |= 0x0040;
+		notify_temp_flag = 0;
+	}
+#endif
+//end-xmyyq-20160503-add bq customer battery notify
+
 #if defined(CONFIG_MTK_JEITA_STANDARD_SUPPORT)
 	else if (BMT_status.temperature < TEMP_NEG_10_THRESHOLD) {
 		g_BatteryNotifyCode |= 0x0020;
@@ -2599,7 +2789,7 @@ static void mt_battery_notify_VBatTemp_check(void)
 	}
 #else
 #ifdef BAT_LOW_TEMP_PROTECT_ENABLE
-	else if (BMT_status.temperature < MIN_CHARGE_TEMPERATURE) {
+	else if (BMT_status.temperature < batt_cust_data.min_charge_temperature) {//add yyq
 		g_BatteryNotifyCode |= 0x0020;
 		battery_log(BAT_LOG_CRTI, "[BATTERY] bat_temp(%d) out of range(too low)\n",
 			    BMT_status.temperature);
@@ -2611,8 +2801,14 @@ static void mt_battery_notify_VBatTemp_check(void)
 		    g_BatteryNotifyCode);
 
 #endif
-}
 
+//start-xmyyq-20160503-add bq customer battery notify
+#ifdef BATTERY_NOTIFY_CASE_0007_REACH_55
+	if(BMT_status.temperature >= 55)
+		g_BatteryNotifyCode |= 0x0080;
+#endif
+//end-xmyyq-20160503-add bq customer battery notify
+}
 
 static void mt_battery_notify_VCharger_check(void)
 {
@@ -2700,7 +2896,12 @@ static void mt_battery_thermal_check(void)
 #if defined(CONFIG_MTK_JEITA_STANDARD_SUPPORT)
 		/* ignore default rule */
 #else
+
 		if (BMT_status.temperature >= 60) {
+#ifdef CONFIG_BATTERY_THERMAL_CHECK_POWER_ON
+			save_thermal_status(1);
+			msleep(5000);
+#endif
 #if defined(CONFIG_POWER_EXT)
 			battery_log(BAT_LOG_CRTI,
 				    "[BATTERY] CONFIG_POWER_EXT, no update battery update power down.\n");
@@ -2736,6 +2937,14 @@ static void mt_battery_thermal_check(void)
 			}
 #endif
 		}
+#ifdef CONFIG_BATTERY_THERMAL_CHECK_POWER_ON
+		if(g_platform_boot_mode != KERNEL_POWER_OFF_CHARGING_BOOT && g_platform_boot_mode != LOW_POWER_OFF_CHARGING_BOOT){
+			if(save_thermal_flag)
+				if(save_thermal_status(0) > 0)
+					save_thermal_flag = 0;
+		}
+#endif
+
 #endif
 
 	}
@@ -2789,7 +2998,9 @@ CHARGER_TYPE mt_charger_type_detection(void)
 	}
 #else
 #if !defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
-	if (BMT_status.charger_type == CHARGER_UNKNOWN) {
+	/*start-160325-xmyyq-sync android5.0 modification*/
+	if((BMT_status.charger_type != STANDARD_HOST)&&(BMT_status.charger_type != CHARGING_HOST)&&(BMT_status.charger_type != STANDARD_CHARGER)){
+	/*end-160325-xmyyq-sync android5.0 modification*/
 #else
 	if ((BMT_status.charger_type == CHARGER_UNKNOWN) &&
 	    (DISO_data.diso_state.cur_vusb_state == DISO_ONLINE)) {
@@ -2870,7 +3081,9 @@ static void mt_battery_charger_detect_check(void)
 		}
 #else
 #if !defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
-		if (BMT_status.charger_type == CHARGER_UNKNOWN) {
+		/*start-160325-xmyyq-sync android5.0 modification*/
+		if ((BMT_status.charger_type != STANDARD_HOST)&&(BMT_status.charger_type != CHARGING_HOST)&&(BMT_status.charger_type != STANDARD_CHARGER)){
+		/*end-160325-xmyyq-sync android5.0 modification*/
 #else
 		if ((BMT_status.charger_type == CHARGER_UNKNOWN) &&
 		    (DISO_data.diso_state.cur_vusb_state == DISO_ONLINE)) {
@@ -3079,47 +3292,8 @@ void do_chrdet_int_task(void)
 	}
 
 }
-#ifdef CONFIG_Y50_TOUCHSENSOR
-extern void aw2013_breath_all(int led0,int led1,int led2);
-extern unsigned char AW2013_i2c_read_reg(unsigned char regaddr) ;
-extern int danceflag;
-extern bool y50d_open_led_flag;
 
-static void charger_led(void )
-{
-	static kal_bool flag = KAL_FALSE;
-	unsigned char reg_val;
 
-	if(flag == KAL_FALSE &&BMT_status.charger_exist  == KAL_TRUE &&BMT_status.UI_SOC !=100)
-	{
-		aw2013_breath_all(1,1,1) ;
-		flag = KAL_TRUE;
-	}
-	else if(flag == KAL_TRUE&&(BMT_status.bat_full == KAL_TRUE  || BMT_status.charger_exist == KAL_FALSE||BMT_status.UI_SOC ==100))
-	{
-		aw2013_breath_all(0,0,0) ;
-		flag = KAL_FALSE;
-	}
-
-	if((BMT_status.charger_exist  == KAL_TRUE && flag == KAL_TRUE) ||y50d_open_led_flag==true )
-	{
-	  reg_val=AW2013_i2c_read_reg(0x30);
-	  reg_val =reg_val&0x07;
-	  if(reg_val  != 0x07)
-	     aw2013_breath_all(1,1,1) ;	
-
-	  printk("xunhu---0x30==%x------flag=%d--\n",reg_val,flag);
-
-	}
-	else
-	{
-		reg_val=AW2013_i2c_read_reg(0x30);
-		 reg_val =reg_val&0x07;
-		 if(reg_val  == 0x07 && danceflag == false && y50d_open_led_flag==false)
-			aw2013_breath_all(0,0,0) ;
-	}
-}
-#endif
 void BAT_thread(void)
 {
 	static kal_bool battery_meter_initilized = KAL_FALSE;
@@ -3143,12 +3317,6 @@ void BAT_thread(void)
 		mt_battery_charging_algorithm();
 	}
 
-	   //-----------------------li fei-----------------	
-#ifdef CONFIG_Y50_TOUCHSENSOR
-	   charger_led();
-#endif
-	//-------------------------------------------
-
 	mt_battery_update_status();
 	mt_kpoc_power_off_check();
 }
@@ -3164,6 +3332,9 @@ void BAT_thread(void)
 int bat_thread_kthread(void *x)
 {
 	ktime_t ktime = ktime_set(3, 0);	/* 10s, 10* 1000 ms */
+	/*start-160325-xmyyq-sync android5.0 modification*/
+	static int charger_det = 0;
+	/*end-160325-xmyyq-sync android5.0 modification*/
 
 #ifdef BATTERY_CDP_WORKAROUND2
 	if (is_usb_rdy() == KAL_FALSE) {
@@ -3181,7 +3352,8 @@ int bat_thread_kthread(void *x)
 		mutex_lock(&bat_mutex);
 
 		if (((chargin_hw_init_done == KAL_TRUE) && (battery_suspended == KAL_FALSE))
-		    || ((chargin_hw_init_done == KAL_TRUE) && (fg_wake_up_bat == KAL_TRUE)))
+		    || ((chargin_hw_init_done == KAL_TRUE) && (fg_wake_up_bat == KAL_TRUE))
+		    || ((chargin_hw_init_done == KAL_TRUE) && (chr_wake_up_bat == KAL_TRUE)))
 			BAT_thread();
 
 		mutex_unlock(&bat_mutex);
@@ -3200,7 +3372,16 @@ int bat_thread_kthread(void *x)
 
 		bat_thread_timeout = KAL_FALSE;
 		hrtimer_start(&battery_kthread_timer, ktime, HRTIMER_MODE_REL);
-		ktime = ktime_set(BAT_TASK_PERIOD, 0);	/* 10s, 10* 1000 ms */
+		/*start-160325-xmyyq-sync android5.0 modification*/
+		if((upmu_is_chr_det() == KAL_TRUE)&&
+				((BMT_status.charger_type != STANDARD_HOST)&&(BMT_status.charger_type != CHARGING_HOST)&&(BMT_status.charger_type != STANDARD_CHARGER)))
+			ktime = ktime_set(2, 0);  // 2s, 2* 1000 ms
+		else if((charger_det < 3) && (g_platform_boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT || g_platform_boot_mode == LOW_POWER_OFF_CHARGING_BOOT)){
+			ktime = ktime_set(2, 0);  // 2s, 2* 1000 ms
+			charger_det++;
+		}else
+			ktime = ktime_set(BAT_TASK_PERIOD, 0);	/* 10s, 10* 1000 ms */
+		/*end-160325-xmyyq-sync android5.0 modification*/
 		if (chr_wake_up_bat == KAL_TRUE && g_smartbook_update != 1) {	/* for charger plug in/ out */
 #if defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
 			if (DISO_data.chr_get_diso_state) {
@@ -3886,6 +4067,11 @@ int __batt_init_cust_data_from_cust_header(void)
 #if defined(USB_CHARGER_CURRENT_CONFIGURED)
 	batt_cust_data.usb_charger_current_configured = USB_CHARGER_CURRENT_CONFIGURED;
 #endif
+/*start-160325-xmyyq-add some charger type charger current node*/
+#if defined(USB_CHARGER_CHARGER_CURRENT)
+	batt_cust_data.usb_charger_charger_current = USB_CHARGER_CHARGER_CURRENT;
+#endif
+/*end-160325-xmyyq-add some charger type charger current node*/
 #if defined(USB_CHARGER_CURRENT)
 	batt_cust_data.usb_charger_current = USB_CHARGER_CURRENT;
 #endif
@@ -3895,9 +4081,19 @@ int __batt_init_cust_data_from_cust_header(void)
 #if defined(AC_CHARGER_CURRENT)
 	batt_cust_data.ac_charger_current = AC_CHARGER_CURRENT;
 #endif
+/*start-160325-xmyyq-add some charger type charger current node*/
+#if defined(NON_STD_AC_CHARGER_CHARGER_CURRENT)
+	batt_cust_data.non_std_ac_charger_charger_current = NON_STD_AC_CHARGER_CHARGER_CURRENT;
+#endif
+/*end-160325-xmyyq-add some charger type charger current node*/
 #if defined(NON_STD_AC_CHARGER_CURRENT)
 	batt_cust_data.non_std_ac_charger_current = NON_STD_AC_CHARGER_CURRENT;
 #endif
+/*start-160325-xmyyq-add some charger type charger current node*/
+#if defined(CHARGING_HOST_CHARGER_CHARGER_CURRENT)
+	batt_cust_data.charging_host_charger_charger_current = CHARGING_HOST_CHARGER_CHARGER_CURRENT;
+#endif
+/*end-160325-xmyyq-add some charger type charger current node*/
 #if defined(CHARGING_HOST_CHARGER_CURRENT)
 	batt_cust_data.charging_host_charger_current = CHARGING_HOST_CHARGER_CURRENT;
 #endif
@@ -3949,6 +4145,11 @@ int __batt_init_cust_data_from_cust_header(void)
 #if defined(V_0PERCENT_TRACKING)
 	batt_cust_data.v_0percent_tracking = V_0PERCENT_TRACKING;
 #endif
+/*start-160325-xmyyq-add system_off_voltage in battery_custom_data*/
+#if defined(SYSTEM_OFF_VOLTAGE)
+        batt_cust_data.system_off_voltage = SYSTEM_OFF_VOLTAGE;
+#endif
+    /*end-160325-xmyyq-add system_off_voltage in battery_custom_data*/
 
 	/* High battery support */
 #if defined(HIGH_BATTERY_VOLTAGE_SUPPORT)
@@ -4067,6 +4268,11 @@ static int __batt_init_cust_data_from_dt(void)
 	__batt_parse_node(np, "usb_charger_current_configured",
 		&batt_cust_data.usb_charger_current_configured);
 
+	/*start-160325-xmyyq-add some charger type charger current node*/
+	__batt_parse_node(np, "usb_charger_charger_current",
+		&batt_cust_data.usb_charger_charger_current);
+	/*end-160325-xmyyq-add some charger type charger current node*/
+
 	__batt_parse_node(np, "usb_charger_current",
 		&batt_cust_data.usb_charger_current);
 
@@ -4076,8 +4282,18 @@ static int __batt_init_cust_data_from_dt(void)
 	__batt_parse_node(np, "ac_charger_current",
 		&batt_cust_data.ac_charger_current);
 
+	/*start-160325-xmyyq-add some charger type charger current node*/
+	__batt_parse_node(np, "non_std_ac_charger_charger_current",
+		&batt_cust_data.non_std_ac_charger_charger_current);
+	/*end-160325-xmyyq-add some charger type charger current node*/
+
 	__batt_parse_node(np, "non_std_ac_charger_current",
 		&batt_cust_data.non_std_ac_charger_current);
+
+	/*start-160325-xmyyq-add some charger type charger current node*/
+	__batt_parse_node(np, "charging_host_charger_charger_current",
+		&batt_cust_data.charging_host_charger_charger_current);
+	/*endif-160325-xmyyq-add some charger type charger current node*/
 
 	__batt_parse_node(np, "charging_host_charger_current",
 		&batt_cust_data.charging_host_charger_current);
@@ -4114,6 +4330,11 @@ static int __batt_init_cust_data_from_dt(void)
 
 	__batt_parse_node(np, "v_0percent_tracking",
 		&batt_cust_data.v_0percent_tracking);
+
+	/*start-160325-xmyyq-add system_off_voltage in battery_custom_data*/
+	__batt_parse_node(np, "system_off_voltage",
+		&batt_cust_data.system_off_voltage);
+	/*end-160325-xmyyq-add system_off_voltage in battery_custom_data*/
 
 	__batt_parse_node(np, "high_battery_voltage_support",
 		&batt_cust_data.high_battery_voltage_support);
@@ -4375,6 +4596,7 @@ static int battery_probe(struct platform_device *dev)
 	BMT_status.UI_SOC = -1;
 #else
 	BMT_status.UI_SOC = 0;
+	get_monotonic_boottime(&bat_time_last_update);
 #endif
 
 	BMT_status.bat_charging_state = CHR_PRE;
@@ -4435,7 +4657,8 @@ static void battery_timer_pause(void)
 	battery_suspended = KAL_TRUE;
 	mutex_unlock(&bat_mutex);
 
-	battery_log(BAT_LOG_CRTI, "@bs=1@\n");
+	/*remove this for log too much*/
+	/*battery_log(BAT_LOG_CRTI, "@bs=1@\n");*/
 #endif
 
 	get_monotonic_boottime(&g_bat_time_before_sleep);
@@ -4447,7 +4670,10 @@ static void battery_timer_resume(void)
 #else
 	kal_bool is_pcm_timer_trigger = KAL_FALSE;
 	struct timespec bat_time_after_sleep;
+	struct timespec bat_time_now;
 	ktime_t ktime, hvtime;
+	kal_bool ext_gauge_IC_update_SOC = KAL_FALSE;
+	long time_after_last_update = 0;
 
 #ifdef CONFIG_MTK_POWER_EXT_DETECT
 	if (KAL_TRUE == bat_is_ext_power())
@@ -4458,6 +4684,21 @@ static void battery_timer_resume(void)
 	hvtime = ktime_set(0, BAT_MS_TO_NS(2000));
 
 	get_monotonic_boottime(&bat_time_after_sleep);
+	get_monotonic_boottime(&bat_time_now);
+
+	time_after_last_update = bat_time_now.tv_sec - bat_time_last_update.tv_sec;
+	/* Decrease UI SOC at least 1% each 5h (14mA) */
+	if (time_after_last_update > 18000 && MATCH_BQ27520_HARDWARE_VERSION != hardware_version
+		&& (!BMT_status.charger_exist || BMT_status.bat_charging_state == CHR_ERROR)) {
+		pr_warn("[%s] Last battery update >5h ago, update UI_SOC. %d->%ld SOC:%d\n",
+				__func__, BMT_status.UI_SOC,
+				BMT_status.UI_SOC - (time_after_last_update / 18000), BMT_status.SOC);
+		BMT_status.UI_SOC = BMT_status.UI_SOC - (time_after_last_update / 18000);
+		get_monotonic_boottime(&bat_time_last_update);
+		UI_SOC_updated = true;
+		mt_battery_update_status();
+	}
+
 	battery_charging_control(CHARGING_CMD_GET_IS_PCM_TIMER_TRIGGER, &is_pcm_timer_trigger);
 
 	if (is_pcm_timer_trigger == KAL_TRUE || bat_spm_timeout) {
@@ -4468,11 +4709,36 @@ static void battery_timer_resume(void)
 		battery_log(BAT_LOG_CRTI, "battery resume NOT by pcm timer!!\n");
 	}
 
-	if (g_call_state == CALL_ACTIVE &&
-		(bat_time_after_sleep.tv_sec - g_bat_time_before_sleep.tv_sec >= batt_cust_data.talking_sync_time)) {
-		/* phone call last than x min */
-		BMT_status.UI_SOC = battery_meter_get_battery_percentage();
-		battery_log(BAT_LOG_CRTI, "Sync UI SOC to SOC immediately\n");
+//modified by xmwwy, update UI_SOC when system has gauge IC
+#if defined(SOC_BY_EXT_HW_FG)
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	if (MATCH_BQ27520_HARDWARE_VERSION == hardware_version)
+	{
+		ext_gauge_IC_update_SOC = KAL_TRUE;
+	}else{
+	    ext_gauge_IC_update_SOC = KAL_FALSE;
+		battery_log(BAT_LOG_CRTI, "---flag ext_gauge_IC_update_SOC is false!---\n");
+	}
+#else
+    ext_gauge_IC_update_SOC = KAL_FALSE;
+#endif
+#else
+    ext_gauge_IC_update_SOC = KAL_FALSE;
+#endif
+    battery_log(BAT_LOG_CRTI, "flag ext_gauge_IC_update_SOC=%d\n",(int)ext_gauge_IC_update_SOC);
+    if(ext_gauge_IC_update_SOC){
+	    if(bat_time_after_sleep.tv_sec - g_bat_time_before_sleep.tv_sec >= 20) {
+		  BMT_status.UI_SOC = battery_meter_get_battery_percentage();
+		  battery_log(BAT_LOG_CRTI, "ext_gauge_IC_update_SOC, Sync UI SOC to SOC immediately\n");
+	    }
+	}else{
+	    if (g_call_state == CALL_ACTIVE &&
+		   (bat_time_after_sleep.tv_sec - g_bat_time_before_sleep.tv_sec >= batt_cust_data.talking_sync_time)) {
+		   /* phone call last than x min */
+		   BMT_status.UI_SOC = battery_meter_get_battery_percentage();
+		   get_monotonic_boottime(&bat_time_last_update);
+		   battery_log(BAT_LOG_CRTI, "Sync UI SOC to SOC immediately\n");
+	    }
 	}
 
 	mutex_lock(&bat_mutex);
@@ -4482,7 +4748,8 @@ static void battery_timer_resume(void)
 	hrtimer_start(&charger_hv_detect_timer, hvtime, HRTIMER_MODE_REL);
 
 	battery_suspended = KAL_FALSE;
-	battery_log(BAT_LOG_CRTI, "@bs=0@\n");
+	/*remove this for log too much*/
+	/*battery_log(BAT_LOG_CRTI, "@bs=0@\n");*/
 	mutex_unlock(&bat_mutex);
 
 #endif

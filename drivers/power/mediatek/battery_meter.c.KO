@@ -41,6 +41,17 @@
 
 #include <mt-plat/upmu_common.h>
 
+#include <mach/mt_ext_fg_defs.h>
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+#include <mach/bq27520.h>
+
+int g_battery_tempeture = 25;
+int tempeture_num = 0;
+#endif
+
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+extern int hardware_version;
+#endif
 
 /* ============================================================ // */
 /* define */
@@ -56,9 +67,6 @@ int Enable_FGADC_LOG = 0;
 /* ============================================================ // */
 BATTERY_METER_CONTROL battery_meter_ctrl = NULL;
 
-/* static struct proc_dir_entry *proc_entry_fgadc; */
-static char proc_fgadc_data[32];
-
 kal_bool gFG_Is_Charging = KAL_FALSE;
 signed int g_auxadc_solution = 0;
 unsigned int g_spm_timer = 600;
@@ -68,6 +76,7 @@ unsigned int _g_bat_sleep_total_time = NORMAL_WAKEUP_PERIOD;
 unsigned int suspend_time = 0;
 #endif
 signed int g_booting_vbat = 0;
+signed int vbat_capacity = 0;
 #if !defined(CONFIG_POWER_EXT)
 static unsigned int temperature_change = 1;
 #endif
@@ -427,6 +436,11 @@ int __batt_meter_init_cust_data_from_cust_header(void)
 #if defined(CAR_TUNE_VALUE)
 	batt_meter_cust_data.car_tune_value = CAR_TUNE_VALUE;
 #endif
+/*start-160325-xmyyq-add system_off_voltage in battery_meter_custom_data*/
+#if defined(SYSTEM_OFF_VOLTAGE)
+        batt_meter_cust_data.system_off_voltage = SYSTEM_OFF_VOLTAGE;
+#endif
+/*end-160325-xmyyq-add system_off_voltage in battery_meter_custom_data*/
 
 	/* HW Fuel gague  */
 #if defined(CURRENT_DETECT_R_FG)
@@ -521,7 +535,7 @@ static void __batt_meter_parse_table(const struct device_node *np,
 	while (!of_property_read_u32_index(np, node_srting, idx, &addr)) {
 		idx++;
 		if (!of_property_read_u32_index(np, node_srting, idx, &val)) {
-			battery_log(BAT_LOG_CRTI, "batt_temperature_table: addr: %d, val: %d\n",
+			battery_log(BAT_LOG_CRTI, "batt_meter_parse_table: addr: %d, val: %d\n",
 				    addr, val);
 		}
 		profile_p->percentage = addr;
@@ -569,7 +583,7 @@ static void __batt_meter_parse_table(const struct device_node *np,
 int __batt_meter_init_cust_data_from_dt(void)
 {
 	struct device_node *np;
-	int num = 0;
+	int num;
 	unsigned int idx, addr, val;
 
 	/* check customer setting */
@@ -727,6 +741,11 @@ int __batt_meter_init_cust_data_from_dt(void)
 	__batt_meter_parse_node(np, "car_tune_value",
 		&batt_meter_cust_data.car_tune_value);
 
+	/*start-160325-xmyyq-add system_off_voltage in battery_meter_custom_data*/
+	__batt_meter_parse_node(np, "system_off_voltage",
+		&batt_meter_cust_data.system_off_voltage);
+	/*end-160325-xmyyq-add system_off_voltage in battery_meter_custom_data*/
+
 	__batt_meter_parse_node(np, "current_detect_r_fg",
 		&batt_meter_cust_data.current_detect_r_fg);
 
@@ -776,17 +795,6 @@ int __batt_meter_init_cust_data_from_dt(void)
 		&batt_meter_cust_data.vbat_remove_detection);
 
 	of_node_put(np);
-
-#ifdef CONFIG_Y50_TOUCHSENSOR	
-		batt_meter_cust_data.q_max_pos_0=6600;
-		batt_meter_cust_data.q_max_pos_25=6600;
-		batt_meter_cust_data.q_max_pos_50=6600;
-		batt_meter_cust_data.q_max_neg_10=6600;
-
-		batt_meter_cust_data.q_max_pos_50_h_current=6468; //6600*0.98
-		batt_meter_cust_data.q_max_pos_0_h_current=6468; 
-		batt_meter_cust_data.q_max_pos_25_h_current=6468; 
-#endif
 
 	return 0;
 }
@@ -1098,7 +1106,17 @@ int force_get_tbat(kal_bool update)
 #if defined(CONFIG_POWER_EXT) || defined(FIXED_TBAT_25)
 	bm_print(BM_LOG_CRTI, "[force_get_tbat] fixed TBAT=25 t\n");
 	return 25;
+#elif defined(SOC_BY_EXT_HW_FG) && defined(EXT_FG_HAS_TEMPERATURE)
+         
+#if defined(CONFIG_MTK_BQ27520_SUPPORT)
+
 #else
+     kal_int32 arg = EXT_FG_CMD_TEMPERATURE;
+     if (battery_meter_ctrl(BATTERY_METER_CMD_EXT_HW_FG, &arg) == 0)
+		return arg;
+#endif
+#endif
+		
 	int bat_temperature_volt = 0;
 	int bat_temperature_val = 0;
 	static int pre_bat_temperature_val = -1;
@@ -1154,9 +1172,30 @@ int force_get_tbat(kal_bool update)
 	} else {
 		bat_temperature_val = pre_bat_temperature_val;
 	}
-	return bat_temperature_val;
+
+#if defined(SOC_BY_EXT_HW_FG) && defined(EXT_FG_HAS_TEMPERATURE)
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	if (MATCH_BQ27520_HARDWARE_VERSION == hardware_version){
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+		if(!tempeture_num)
+		{
+			bq27520_write_batt_temperature(bat_temperature_val);
+			g_battery_tempeture = bat_temperature_val;
+			tempeture_num ++;
+		} else{
+			if(((bat_temperature_val - g_battery_tempeture) >10)  ||((g_battery_tempeture - bat_temperature_val) > 10))
+			{
+				bq27520_write_batt_temperature(bat_temperature_val);
+				g_battery_tempeture = bat_temperature_val;
+			}
+		}
 #endif
+	}
+#endif
+#endif
+	return bat_temperature_val;
 }
+
 EXPORT_SYMBOL(force_get_tbat);
 
 #ifdef MTK_MULTI_BAT_PROFILE_SUPPORT
@@ -1821,7 +1860,13 @@ signed int fgauge_get_Q_max_high_current_by_current(signed int i_current, signed
 	signed int OCV_temp = 0, Rbat_temp = 0, V_drop = 0;
 	R_PROFILE_STRUCT_P p_profile_r;
 	BATTERY_PROFILE_STRUCT_P p_profile_battery;
-	signed int threshold = SYSTEM_OFF_VOLTAGE;
+	/*start-160325-xmyyq-add system_off_voltage in battery_meter_custom_data*/
+	if(batt_meter_cust_data.system_off_voltage != 0)
+		signed int threshold = batt_meter_cust_data.system_off_voltage;
+	else
+		signed int threshold = SYSTEM_OFF_VOLTAGE;
+	/*end-160325-xmyyq-add system_off_voltage in battery_meter_custom_data*/
+
 	/* for Qmax initialization */
 	ret_Q_max = fgauge_get_Q_max_high_current(val_temp);
 
@@ -2099,7 +2144,7 @@ if (((g_rtc_fg_soc != 0)
 	     &&
 	     (((abs(g_rtc_fg_soc - gFG_capacity_by_v)) <
 	       batt_meter_cust_data.cust_poweron_delta_capacity_tolrance)
-	      || (abs(g_rtc_fg_soc - g_booting_vbat) <
+	      || (abs(g_rtc_fg_soc - vbat_capacity) <
 		  batt_meter_cust_data.cust_poweron_delta_capacity_tolrance))
 	     &&
 	     ((gFG_capacity_by_v > batt_meter_cust_data.cust_poweron_low_capacity_tolrance
@@ -2188,7 +2233,6 @@ signed int mtk_imp_tracking(signed int ori_voltage, signed int ori_current, sign
 void oam_init(void)
 {
 	int ret = 0;
-	signed int vbat_capacity = 0;
 	kal_bool charging_enable = KAL_FALSE;
 
 	/*stop charging for vbat measurement */
@@ -3140,7 +3184,7 @@ signed int get_dynamic_period(int first_use, int first_wakeup_time, int battery_
 
 	return first_wakeup_time;
 
-#elif defined(SOC_BY_AUXADC) ||  defined(SOC_BY_SW_FG)
+#elif defined(SOC_BY_AUXADC) || defined(SOC_BY_SW_FG) || defined(SOC_BY_HW_FG)
 
 	signed int vbat_val = 0;
 
@@ -3240,10 +3284,26 @@ signed int get_dynamic_period(int first_use, int first_wakeup_time, int battery_
 /* ============================================================ // */
 signed int battery_meter_get_battery_voltage(kal_bool update)
 {
-#if 1
 	int ret = 0;
 	int val = 5;
 	static int pre_val = -1;
+
+#if defined(SOC_BY_EXT_HW_FG) && defined(EXT_FG_HAS_VOLTAGE)
+	kal_int32 arg = EXT_FG_CMD_VOLTAGE;
+
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+        if (MATCH_BQ27520_HARDWARE_VERSION == hardware_version){
+#endif
+	if (battery_meter_ctrl(BATTERY_METER_CMD_EXT_HW_FG, &arg) == 0){
+		g_sw_vbat_temp = arg;
+		return arg;
+	}else{
+		printk("[battery_meter_get_battery_voltage] read bq27520 voltage error!!!\n");
+	}
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	}
+#endif
+#endif
 
 	if (update == KAL_TRUE || pre_val == -1) {
 		val = 5;	/* set avg times */
@@ -3265,9 +3325,6 @@ signed int battery_meter_get_battery_voltage(kal_bool update)
 #endif
 
 	return val;
-#else
-	return cw2015_get_voltage();
-#endif
 }
 
 signed int battery_meter_get_charging_current_imm(void)
@@ -3394,6 +3451,21 @@ signed int battery_meter_get_battery_current(void)
 	int ret = 0;
 	signed int val = 0;
 
+#if defined(SOC_BY_EXT_HW_FG) && defined(EXT_FG_HAS_CURRENT)
+	kal_int32 arg = EXT_FG_CMD_CURRENT;
+
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	if (MATCH_BQ27520_HARDWARE_VERSION == hardware_version){
+#endif
+	if (battery_meter_ctrl(BATTERY_METER_CMD_EXT_HW_FG, &arg) == 0)
+		return arg;
+	else
+		printk("[battery_meter_get_current] read bq27520 current error!!!\n");
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	}
+#endif
+#endif
+
 	if (g_auxadc_solution == 1)
 		val = oam_i_2;
 	else
@@ -3449,7 +3521,9 @@ signed int battery_meter_get_charger_voltage(void)
 	int ret = 0;
 	int val = 0;
 
-	val = 5;		/* set avg times */
+	/*start-xmyyq-201604028-Fix show over charger voltage sometimes*/
+	val = 10;	//5	/* set avg times */
+	/*end-xmyyq-201604028-Fix show over charger voltage sometimes*/
 	ret = battery_meter_ctrl(BATTERY_METER_CMD_GET_ADC_V_CHARGER, &val);
 
 	/* val = (((R_CHARGER_1+R_CHARGER_2)*100*val)/R_CHARGER_2)/100; */
@@ -3466,15 +3540,19 @@ signed int battery_meter_get_battery_soc(void)
 {
 #if defined(SOC_BY_HW_FG)
 	return gFG_capacity_by_c;
-#else
-	return 50;
-#endif
 
-#if defined(SOC_BY_SW_FG)
+#elif defined(SOC_BY_SW_FG)
+#ifdef OAM_D5
 #if (OAM_D5 == 1)
 	return 100 - oam_d_5;
 #else
 	return 100 - oam_d_2;
+#endif
+#else
+    if(batt_meter_cust_data.oam_d5 == 1)
+		return 100 - oam_d_5;
+	else
+		return 100 - oam_d_2;
 #endif
 #else
 	return 50;
@@ -3533,15 +3611,29 @@ signed int battery_meter_get_battery_percentage(void)
 	return 50;
 #else
 
+#if defined(SOC_BY_EXT_HW_FG) && defined(EXT_FG_HAS_SOC)
+	kal_int32 arg = EXT_FG_CMD_SOC;
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	if (MATCH_BQ27520_HARDWARE_VERSION == hardware_version){
+#endif
+	if (battery_meter_ctrl(BATTERY_METER_CMD_EXT_HW_FG, &arg) == 0){
+
+#if defined(BAT_CAPACITY_MIN) && defined(BAT_CAPACITY_MAX)
+		arg = max(arg, BAT_CAPACITY_MIN);
+		arg = ((arg - BAT_CAPACITY_MIN) * 100 + (BAT_CAPACITY_MAX - BAT_CAPACITY_MIN) / 2) / (BAT_CAPACITY_MAX - BAT_CAPACITY_MIN);
+#endif
+
+		return arg;
+	}else{
+		printk("[battery_meter_get_battery_percentage] read bq27520 battery capacity error!!!\n");
+	}
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	}
+#endif
+#endif
+
 	if (bat_is_charger_exist() == KAL_FALSE)
 		fg_qmax_update_for_aging_flag = 1;
-
-//////add lifei/////////
-#if 0
-return cw2015_get_capacity();
-#endif
-////////end/////////////
-
 
 #if defined(SOC_BY_AUXADC)
 	return auxadc_algo_run();
@@ -3565,10 +3657,17 @@ return cw2015_get_capacity();
 #if defined(SOC_BY_SW_FG)
 	oam_run();
 #if !defined(CUST_CAPACITY_OCV2CV_TRANSFORM)
+#ifdef OAM_D5
 #if (OAM_D5 == 1)
 	return 100 - oam_d_5;
 #else
 	return 100 - oam_d_2;
+#endif
+#else
+    if(batt_meter_cust_data.oam_d5 == 1)
+		return 100 - oam_d_5;
+	else
+		return 100 - oam_d_2;
 #endif
 #else
 #if (OAM_D5 == 1)
@@ -3615,12 +3714,23 @@ signed int battery_meter_initial(void)
 		bm_print(BM_LOG_CRTI, "[battery_meter_initial] SOC_BY_SW_FG done\n");
 #endif
 
+#if defined(SOC_BY_EXT_HW_FG)
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	 if (MATCH_BQ27520_HARDWARE_VERSION == hardware_version){
+		// 1. HW initialization
+		battery_meter_ctrl(BATTERY_METER_CMD_HW_FG_INIT, NULL);
+		bm_print(BM_LOG_CRTI, "[battery_meter_initial] SOC_BY_EXT_HW_FG done\n");
+     }
+#endif
+#endif
+
 		meter_initilized = KAL_TRUE;
 	}
 	mutex_unlock(&FGADC_mutex);
 	return 0;
 #endif
 }
+
 
 void reset_parameter_car(void)
 {
@@ -3803,15 +3913,17 @@ signed int battery_meter_get_VSense(void)
 static ssize_t fgadc_log_write(struct file *filp, const char __user *buff,
 			       size_t len, loff_t *data)
 {
-	if (copy_from_user(&proc_fgadc_data, buff, len)) {
+	char proc_fgadc_data;
+
+	if ((len <= 0) || copy_from_user(&proc_fgadc_data, buff, 1)) {
 		bm_print(BM_LOG_CRTI, "fgadc_log_write error.\n");
 		return -EFAULT;
 	}
 
-	if (proc_fgadc_data[0] == '1') {
+	if (proc_fgadc_data == '1') {
 		bm_print(BM_LOG_CRTI, "enable FGADC driver log system\n");
 		Enable_FGADC_LOG = BM_LOG_CRTI;
-	} else if (proc_fgadc_data[0] == '2') {
+	} else if (proc_fgadc_data == '2') {
 		bm_print(BM_LOG_CRTI, "enable FGADC driver log system:2\n");
 		Enable_FGADC_LOG = BM_LOG_FULL;
 	} else {
@@ -4432,11 +4544,31 @@ static int battery_meter_remove(struct platform_device *dev)
 
 static void battery_meter_shutdown(struct platform_device *dev)
 {
+#if defined(SOC_BY_EXT_HW_FG) && defined(EXT_FG_HAS_SHUTDOWN)
+    kal_int32 arg = 0;
+#endif
 	bm_print(BM_LOG_CRTI, "[battery_meter_shutdown]\n");
+
+#if defined(SOC_BY_EXT_HW_FG) && defined(EXT_FG_HAS_SHUTDOWN)
+	arg = EXT_FG_CMD_SHUTDOWN;
+
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	if (MATCH_BQ27520_HARDWARE_VERSION == hardware_version){
+#endif
+	if (battery_meter_ctrl(BATTERY_METER_CMD_EXT_HW_FG, &arg) == 0)
+		return;
+	else
+		printk("[battery_meter_shutdown] write bq27520 shutdown error!!!\n");
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+	}
+#endif
+#endif
+
 }
 
 static int battery_meter_suspend(struct platform_device *dev, pm_message_t state)
 {
+
 #if defined(FG_BAT_INT)
 #if defined(CONFIG_POWER_EXT)
 #elif defined(SOC_BY_HW_FG)
@@ -4668,9 +4800,10 @@ static int battery_meter_resume(struct platform_device *dev)
 #if defined(CONFIG_POWER_EXT)
 
 #elif defined(SOC_BY_SW_FG) || defined(SOC_BY_HW_FG)
+	signed int sleep_interval;
 #if defined(SOC_BY_SW_FG)
 	signed int hw_ocv_after_sleep;
-	signed int DOD_hwocv, sleep_interval;
+	signed int DOD_hwocv;
 	struct timespec now_time;
 #endif
 	struct timespec rtc_time_after_sleep;

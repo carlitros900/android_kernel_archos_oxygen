@@ -2,7 +2,9 @@ WHAT IS THIS?
 =============
 
 Linux Kernel source code for the devices:
-* bq aquaris M10 FHD
+* Archos 101b Oxygen (AC101BOX)
+
+Maybe compatible with ARCHOS oxygen 70 / 80
 
 
 BUILD INSTRUCTIONS?
@@ -11,7 +13,7 @@ BUILD INSTRUCTIONS?
 Specific sources are separated by branches and each version is tagged with it's corresponding number. First, you should
 clone the project:
 
-        $ git clone https://github.com/bq/aquaris-M10-FHD.git
+        $ git clone https://github.com/carlitros900/android_kernel_archos_oxygen.git
 
 After it, choose the version you would like to build:
 
@@ -19,7 +21,7 @@ After it, choose the version you would like to build:
 
         $ mv aquaris-M10-FHD kernel
         $ cd kernel
-        $ git checkout aquaris-M10-FHD_2.x
+        $ git checkout feature/merger-freezerfhd
 
 At the same level of the "kernel" directory:
 
@@ -40,7 +42,7 @@ Finally, build the kernel according the next table of product names:
 
 | device                    | product                 |
 | --------------------------|-------------------------|
-| bq aquaris M10 FHD        | bq_aquaris_m10_FHD      |
+| Archos 101b Oxygen        | ac101box                |
 
 
         $ make -C kernel  O=../KERNEL_OUT  ARCH=arm64 CROSS_COMPILE=../aarch64-linux-android-4.9/bin/aarch64-linux-android- {product}_defconfig
