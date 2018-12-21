@@ -2,6 +2,9 @@
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/hwmon/include
 
 obj-y   +=  accel.o accel_factory.o
+obj-$(CONFIG_MTK_STK83XX)	+=   stk83xx/
+obj-$(CONFIG_MTK_STK8BAXX)	+=  stk8baxx/
+obj-$(CONFIG_MTK_MXC400X_NEW)   +=  mxc400x-new/
 
 ifeq ($(CONFIG_MTK_SCP_SENSORHUB_V1),y)
 obj-$(CONFIG_MTK_ACCELHUB)		+=	accelhub/
