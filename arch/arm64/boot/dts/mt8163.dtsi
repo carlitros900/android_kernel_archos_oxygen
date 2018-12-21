@@ -1704,8 +1704,6 @@
 
 		mtee {
 			compatible = "mediatek,mtee";
-			clocks = <&infracfg CLK_INFRA_GCPU>;
-			clock-names = "GCPU";
 		};
 	};
 
@@ -1719,12 +1717,6 @@
 
         lcm_wy: lcm_wy {
         	compatible = "mediatek,lcm_wy";
-        };
-		 lcm_hnh: lcm_hnh {
-        	compatible = "mediatek,lcm_hnh";
-        };
-		lcm_xfk: lcm_xfk {
-        	compatible = "mediatek,lcm_xfk";
         };
 };
 
