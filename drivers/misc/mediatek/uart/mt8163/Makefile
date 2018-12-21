@@ -1,3 +1,5 @@
+ccflags-y := -Wno-bool-compare
+
 #ccflags-y += -DCONFIG_MTK_FPGA
 #ccflags-y += -DFIX_TO_26M
 
