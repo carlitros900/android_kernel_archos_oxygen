@@ -5468,7 +5468,7 @@ static void cmdq_core_handle_secure_paths_exec_done_notify(const int32_t notifyT
 	const uint32_t startThread = CMDQ_MIN_SECURE_THREAD_ID;
 	const uint32_t endThread = CMDQ_MIN_SECURE_THREAD_ID + CMDQ_MAX_SECURE_THREAD_COUNT;
 
-	memset(secure_exec_counter, 0, 3);
+	memset(secure_exec_counter, 0, sizeof(secure_exec_counter));
 	/* HACK:
 	 * IRQ of the notify thread,
 	 * implies threre are some secure tasks execute done.
