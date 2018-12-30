@@ -42,7 +42,6 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/swiotlb.h>
-#include <mt-plat/mtk_memcfg.h>
 
 #define OFFSET(val,align) ((unsigned long)	\
 	                   ( (val) & ( (align) - 1)))
@@ -124,11 +123,7 @@ unsigned long swiotlb_nr_tbl(void)
 EXPORT_SYMBOL_GPL(swiotlb_nr_tbl);
 
 /* default to 64MB */
-#ifdef CONFIG_MTK_LM_MODE
 #define IO_TLB_DEFAULT_SIZE (64UL<<20)
-#else
-#define IO_TLB_DEFAULT_SIZE ((1 << IO_TLB_SHIFT) * IO_TLB_SEGSIZE)
-#endif /* end of CONFIG_MTK_LM_MODE */
 unsigned long swiotlb_size_or_default(void)
 {
 	unsigned long size;
@@ -711,7 +706,6 @@ swiotlb_full(struct device *dev, size_t size, enum dma_data_direction dir,
 	 */
 	printk(KERN_ERR "DMA: Out of SW-IOMMU space for %zu bytes at "
 	       "device %s\n", size, dev ? dev_name(dev) : "?");
-	BUG();
 
 	if (size <= io_tlb_overflow || !do_panic)
 		return;
@@ -996,3 +990,4 @@ swiotlb_dma_supported(struct device *hwdev, u64 mask)
 	return phys_to_dma(hwdev, io_tlb_end - 1) <= mask;
 }
 EXPORT_SYMBOL(swiotlb_dma_supported);
+
