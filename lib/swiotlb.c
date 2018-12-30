@@ -156,8 +156,6 @@ void swiotlb_print_info(void)
 		return;
 	}
 
-	MTK_MEMCFG_LOG_AND_PRINTK("software IO TLB [mem %#010llx-%#010llx] (%luMB) mapped at [%p-%p]\n",
-
 	pr_info("mapped [mem %#010llx-%#010llx] (%luMB)\n",
 	       (unsigned long long)io_tlb_start,
 	       (unsigned long long)io_tlb_end,
