@@ -1644,6 +1644,7 @@ fm_s32 MT6627fm_low_ops_unregister(struct fm_lowlevel_ops *ops)
 /* static struct fm_pub pub; */
 /* static struct fm_pub_cb *pub_cb = &pub.pub_tbl; */
 
+#if 0
 static const fm_u16 mt6627_mcu_dese_list[] = {
 	7630, 7800, 7940, 8320, 9260, 9600, 9710, 9920, 10400, 10410
 };
@@ -1651,6 +1652,7 @@ static const fm_u16 mt6627_mcu_dese_list[] = {
 static const fm_u16 mt6627_gps_dese_list[] = {
 	7850, 7860
 };
+#endif
 
 static const fm_s8 mt6627_chan_para_map[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0,	/* 6500~6595 */
