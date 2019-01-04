@@ -208,6 +208,8 @@ config MTK_LCM_PHYSICAL_ROTATION_HW
 config MTK_SM100
 	bool "Software synchronization 64bits objects"
 	default n
+
+source "drivers/misc/mediatek/Kconfig.custom"
 source "drivers/misc/mediatek/gpt/Kconfig"
 source "drivers/misc/mediatek/uart/Kconfig"
 source "drivers/misc/mediatek/irtx/Kconfig"
