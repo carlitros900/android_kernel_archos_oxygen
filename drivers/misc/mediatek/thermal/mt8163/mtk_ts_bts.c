@@ -511,7 +511,7 @@ static int get_hw_bts_temp(void)
 {
 
 	int ret = 0, data[4], i, ret_value = 0, ret_temp = 0, output;
-	int times = 1, Channel = 0;	/* g_RAP_ADC_channel;//8163=0(AUX_IN0_NTC) */
+	int times = 1, Channel = 15;	/* g_RAP_ADC_channel;//8163=0(AUX_IN0_NTC) */
 	static int valid_temp;
 
 	if (IMM_IsAdcInitReady() == 0) {
@@ -528,8 +528,7 @@ static int get_hw_bts_temp(void)
 			valid_temp = ret_temp;
 		}
 		ret += ret_temp;
-		mtkts_bts_dprintk("[thermal_auxadc_get_data(AUX_IN0_NTC)]: ret_temp=%d\n",
-				  ret_temp);
+		mtkts_bts_dprintk("[thermal_auxadc_get_data(AUX_IN0_NTC->Channel %d)]: ret_temp=%d\n",Channel,ret_temp);
 	}
 
 
