@@ -70,7 +70,7 @@
 // #define STK_DEBUG_CALI
 
 /*----------------------------------------------------------------------------*/
-#define STK8BAXX_INIT_ODR		    10		// 9=31Hz, 10=62Hz, 11=125Hz
+#define STK8BAXX_INIT_ODR		    11		// 9=31Hz, 10=62Hz, 11=125Hz
 #define  STK8BAXX_SPTIME_NO		  3
 #define  STK8BAXX_SPTIME_BASE	 0x9
 const static int STK8BAXX_SAMPLE_TIME[STK8BAXX_SPTIME_NO] = {32000, 16000, 8000};
