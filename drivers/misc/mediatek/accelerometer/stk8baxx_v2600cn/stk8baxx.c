@@ -66,7 +66,8 @@
 #define CONFIG_STK8BAXX_LOWPASS
 // #define STK_ZG_FILTER
 // #define STK_ENABLE_AT_BOOT
-#define STK_DEBUG_PRINT
+// #define STK_DEBUG_PRINT
+// #define STK_DEBUG_CALI
 
 /*----------------------------------------------------------------------------*/
 #define STK8BAXX_INIT_ODR		    10		// 9=31Hz, 10=62Hz, 11=125Hz
@@ -237,7 +238,8 @@ const static int STK8BAXX_SAMPLE_TIME[STK8BAXX_SPTIME_NO] = {32000, 16000, 8000}
 #define CAL_TG_X0_Y0_ZPOS1		0x20
 #define CAL_TG_X0_Y0_ZNEG1		0x40
 
-#define STK8BAXX_I2C_SLAVE_ADDR		0x18
+#define STK8BAXX_I2C_SLAVE_ADDR		0x18		//(SDO=GND or floating)
+//#define STK8BAXX_I2C_SLAVE_ADDR	0x19		//(SDO=VDDIO)	
 
 #define STK8BA50_ID  		0x09	// reg 0x22, STK8BAXX_LGDLY
 #define STK8BA50R_ID		0x86	// reg 0x0
@@ -270,14 +272,12 @@ const static int STK8BAXX_SAMPLE_TIME[STK8BAXX_SPTIME_NO] = {32000, 16000, 8000}
 #define STK_SELFTEST_NOISE_Z			(STK_SELFTEST_LSB_1G / 10)
 
 /*----------------------------------------------------------------------------*/
-#define DEBUG 1
+// #define DEBUG 1
 
 #define GSE_TAG                  "[Gsensor] "
-//#define GSE_FUN(f)               pr_info(GSE_TAG"%s start\n", __func__)
-#define GSE_FUN(f, args...)               pr_err(GSE_TAG"%s %d start\n", __func__, __LINE__, ##args)
+#define GSE_FUN(f)               pr_info(GSE_TAG"%s start\n", __func__)
 #define GSE_ERR(fmt, args...)    pr_err(GSE_TAG"%s %d : "fmt, __func__, __LINE__, ##args)
-#define GSE_LOG(fmt, args...)    pr_err(GSE_TAG"%s %d : "fmt, __func__, __LINE__, ##args)
-//#define GSE_LOG(fmt, args...)    pr_info(GSE_TAG "%s: "fmt,  __func__, ##args)
+#define GSE_LOG(fmt, args...)    pr_info(GSE_TAG "%s: "fmt,  __func__, ##args)
 /*----------------------------------------------------------------------------*/
 static const struct i2c_device_id stk8baxx_i2c_id[] = { {STK8BAXX_DEV_NAME, 0}, {} };
 
@@ -298,7 +298,7 @@ static int stk8baxx_suspend(struct i2c_client *client, pm_message_t msg);
 static int stk8baxx_resume(struct i2c_client *client);
 static int STK8BAXX_SetOffset(struct i2c_client *client, char buf[]);
 static int stk8baxx_store_in_file(u8 offset[], u8 status, u32 variance[]);
-/* static int stk8baxx_i2c_detect(struct i2c_client *client, int kind, struct i2c_board_info *info); */
+static int stk8baxx_i2c_detect(struct i2c_client *client, struct i2c_board_info *info);
 /*----------------------------------------------------------------------------*/
 static DEFINE_MUTEX(gsensor_mutex);
 static DEFINE_MUTEX(gsensor_scp_en_mutex);
@@ -321,7 +321,7 @@ static DEFINE_MUTEX(stk8baxx_i2c_mutex);
 /*----------------------------------------------------------------------------*/
 
 static struct acc_init_info stk8baxx_init_info = {
-	.name = "STK8BAXX",
+	.name = "stk8baxx",
 	.init = gsensor_local_init,
 	.uninit = gsensor_remove,
 };
@@ -400,8 +400,7 @@ struct stk8baxx_i2c_data {
 /*----------------------------------------------------------------------------*/
 #ifdef CONFIG_OF
 static struct of_device_id stk8baxx_match_table[] = {
-	//{ .compatible = "mediatek,gsensor", },
-	{ .compatible = "mediatek,STK8BAXX", },
+	{ .compatible = "mediatek,gsensor", },
 	{ },
 };
 #endif
@@ -415,7 +414,7 @@ static struct i2c_driver stk8baxx_i2c_driver = {
 	},
 	.probe = stk8baxx_i2c_probe,
 	.remove = stk8baxx_i2c_remove,
-	/* .detect                         = stk8baxx_i2c_detect, */
+	.detect = stk8baxx_i2c_detect,
 	.suspend = stk8baxx_suspend,
 	.resume = stk8baxx_resume,
 	.id_table = stk8baxx_i2c_id,
@@ -3671,6 +3670,11 @@ static int gsensor_get_data(int *x, int *y, int *z, int *status)
 /* strcpy(info->type, STK8BAXX_DEV_NAME); */
 /* return 0; */
 /* } */
+static int stk8baxx_i2c_detect(struct i2c_client *client, struct i2c_board_info *info)
+{
+strcpy(info->type, STK8BAXX_DEV_NAME);
+return 0;
+}
 
 /*----------------------------------------------------------------------------*/
 static int stk8baxx_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id)
@@ -3681,11 +3685,15 @@ static int stk8baxx_i2c_probe(struct i2c_client *client, const struct i2c_device
 	struct acc_data_path data = { 0 };
 	int err = 0;
 
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-1\n");
-	obj = kzalloc(sizeof(*obj), GFP_KERNEL);
+        if(!(obj = kzalloc(sizeof(*obj), GFP_KERNEL)))
+        {
+                err = -ENOMEM;
+                GSE_ERR("kzalloc errror!!\n");
+                goto exit;
+        }
 
 	printk("%s: driver version: %s\n", __FUNCTION__, STK_DRIVER_VERSION);
-	client->addr = obj->hw->i2c_addr[0];
+	client->addr = STK8BAXX_I2C_SLAVE_ADDR;
 	printk("%s: Set I2C Address = 0x%x\n", __FUNCTION__, client->addr);
 
 	if (!obj) {
@@ -3693,7 +3701,6 @@ GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-1\n");
 		goto exit;
 	}
 
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-2\n");
 	memset(obj, 0, sizeof(struct stk8baxx_i2c_data));
 
 	obj->hw = hw;
@@ -3706,7 +3713,6 @@ GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-2\n");
 	INIT_WORK(&obj->irq_work, gsensor_irq_work);
 #endif				/* #ifdef CONFIG_CUSTOM_KERNEL_SENSORHUB */
 
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-3\n");
 	obj_i2c_data = obj;
 	obj->client = client;
 	new_client = obj->client;
@@ -3720,7 +3726,6 @@ GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-3\n");
 	obj->SCP_init_done = 0;
 #endif				/* #ifdef CONFIG_CUSTOM_KERNEL_SENSORHUB */
 
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-4\n");
 #ifdef CONFIG_STK8BAXX_LOWPASS
 	if(obj->hw->firlen > C_MAX_FIR_LENGTH)
 		atomic_set(&obj->firlen, C_MAX_FIR_LENGTH);
@@ -3731,7 +3736,6 @@ GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-4\n");
 		atomic_set(&obj->fir_en, 1);
 		atomic_set(&obj->filter, 1);
 	}
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-5\n");
 #endif
 	obj->selftest_status = STK_SELFTEST_STAT_NA;
 	stk8baxx_i2c_client = new_client;
@@ -3747,7 +3751,6 @@ GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-5\n");
 		goto exit_misc_device_register_failed;
 	}
 
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-6\n");
 	err = stk8baxx_create_attr(&stk8baxx_init_info.platform_diver_addr->driver);
 	if (err) {
 		GSE_ERR("create attribute err = %d\n", err);
@@ -3769,7 +3772,6 @@ GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-6\n");
 	ctl.is_support_batch = false;
 #endif
 
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-7\n");
 	err = acc_register_control_path(&ctl);
 	if (err) {
 		GSE_ERR("register acc control path err\n");
@@ -3784,7 +3786,6 @@ GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-7\n");
 		goto exit_create_attr_failed;
 	}
 
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-8\n");
 	err = batch_register_support_info(ID_ACCELEROMETER, ctl.is_support_batch, 102, 0);	//divisor is 1000/9.8
 	if (err) {
 		GSE_ERR("register gsensor batch support err = %d\n", err);
@@ -3794,7 +3795,6 @@ GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-8\n");
 	gsensor_init_flag = 0;
 	printk("%s: OK\n", __func__);
 
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-9\n");
 	return 0;
 
 exit_create_attr_failed:
@@ -3804,7 +3804,6 @@ exit_init_failed:
 	/* i2c_detach_client(new_client); */
 	kfree(obj);
 exit:
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-PROBE-10\n");
 	printk("%s: err = %d\n", __func__, err);
 	gsensor_init_flag = -1;
 	return err;
@@ -3836,18 +3835,13 @@ static int gsensor_local_init(void)
 
 	GSE_FUN();
 
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-INIT-1\n");
 	stk8baxx_power(hw, 1);
-
-        GSE_ERR("i2c_number=%d\n", hw->i2c_num);
-        GSE_ERR("i2c_addr=%d\n", hw->i2c_addr[0]);
 	
 	if (i2c_add_driver(&stk8baxx_i2c_driver)) {
 		GSE_ERR("add driver error\n");
 		return -1;
 	};
 	
-GSE_ERR("XXXXXXXXXXXXXXXXXXXXXX-INIT-2\n");
 	if (-1 == gsensor_init_flag)
 		return -1;
 	return 0;
@@ -3869,8 +3863,6 @@ static int __init stk8baxx_init(void)
 	struct i2c_board_info i2c_stk8baxx= { I2C_BOARD_INFO("STK8BAXX", STK8BAXX_I2C_SLAVE_ADDR)};
 #endif
 
-	GSE_ERR("XXXXXXXXXXXXXXXXX.stk8baxx_init\n");
-
 	printk("%s: init\n", __func__);
 	
 	hw = get_accel_dts_func("mediatek,STK8BAXX", hw);
@@ -3878,12 +3870,9 @@ static int __init stk8baxx_init(void)
 		GSE_ERR("get dts info fail\n");
 #ifdef CONFIG_MTK_LEGACY
 	i2c_register_board_info( hw->i2c_num, &i2c_stk8baxx, 1);
-	GSE_ERR("XXXXXXXXXXXXXXXXX.stk8baxx_init-opcion\n");
 #endif
 	printk("%s: i2c_number=%d\n", __func__, hw->i2c_num);
-	GSE_ERR("XXXXXXXXXXXXXXXXX.stk8baxx_init-2\n");
 	acc_driver_add(&stk8baxx_init_info);
-	GSE_ERR("XXXXXXXXXXXXXXXXX.stk8baxx_init-3\n");
 
 #ifdef STK_PERMISSION_THREAD
 	STKPermissionThread = kthread_run(stk_permission_thread,"stk","Permissionthread");
