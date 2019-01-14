@@ -212,11 +212,11 @@ cust_accel@1 {
 		rst-gpio = <&pio 52 0>;
 	};
 	gsensor@18 {
-		compatible = "mediatek,gsensor1";
+		compatible = "mediatek,gsensor";
 		reg = <0x18>;
 	};
 	gsensor@3d {
-		compatible = "mediatek,gsensor";
+		compatible = "mediatek,gsensor1";
 		reg = <0x3d>;
 	};
 
