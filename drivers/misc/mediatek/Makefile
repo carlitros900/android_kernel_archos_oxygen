@@ -8,6 +8,7 @@ subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLA
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
 subdir-ccflags-y += -I$(srctree)/drivers/mmc/host/mediatek/$(MTK_PLATFORM)
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/lcm/inc
+subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/imgsensor/inc
 
 obj-$(CONFIG_MTK_BASE_POWER) += base/
 obj-$(CONFIG_MTK_POWER_GS) += power_gs/
@@ -105,11 +106,11 @@ obj-$(CONFIG_MTK_SECURITY_SW_SUPPORT) +=masp/
 obj-$(CONFIG_MEDIATEK_SOLUTION)  += sched/
 obj-y += cameraisp/src/
 
-ifeq ($(wildcard $(MTK_CUSTOM_PATH)/mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/imgsensor),)
-obj-$(CONFIG_MTK_IMGSENSOR) += imgsensor/src/
-else
+#ifeq ($(wildcard $(MTK_CUSTOM_PATH)/mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/imgsensor),)
+#obj-$(CONFIG_MTK_IMGSENSOR) += imgsensor/src/
+#else
 obj-$(CONFIG_MTK_IMGSENSOR) += mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/imgsensor/src/
-endif
+#endif
 
 #ifneq ($(wildcard $(MTK_CUSTOM_PATH)/mach/$(MTK_PLATFORM)/$(ARCH_MTK_PROJECT)/lcm),)
 #obj-$(CONFIG_MTK_LCM) += lcm/
