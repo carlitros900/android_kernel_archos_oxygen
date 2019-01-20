@@ -35,7 +35,7 @@
 
 #include "gc2355mipi_Sensor.h"
 
-#define GC2355MIPI_2Lane   //   for  mipi lane num
+//#define GC2355MIPI_2Lane   //   for  mipi lane num
 /****************************Modify Following Strings for Debug****************************/
 #define PFX "GC2355_camera_sensor"
 #define LOG_1 LOG_INF("GC2355,MIPI 2LANE\n")
