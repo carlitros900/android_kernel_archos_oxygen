@@ -122,7 +122,7 @@ static imgsensor_info_struct imgsensor_info = {
         .max_framerate = 300,
     },
     .margin = 0,            //sensor framelength & shutter margin
-    .min_shutter = 7,        //min shutter
+    .min_shutter = 12,        //min shutter
     .max_frame_length = 0x3fff,//max framelength by sensor register's limitation
     .ae_shut_delay_frame = 0,    //shutter delay frame for AE cycle, 2 frame with ispGain_delay-shut_delay=2-0=2
     .ae_sensor_gain_delay_frame = 0,//sensor gain delay frame for AE cycle,2 frame with ispGain_delay-sensor_gain_delay=2-0=2
@@ -302,7 +302,7 @@ static void set_shutter(kal_uint16 shutter)
 
 	// Update Shutter
 	if(shutter > 16383) shutter = 16383;
-	if(shutter < 7) shutter = 7;
+	if(shutter < 12) shutter = 12;
 	write_cmos_sensor(0x03, (shutter>>8) & 0x3F);
 	write_cmos_sensor(0x04, shutter & 0xFF);
 
