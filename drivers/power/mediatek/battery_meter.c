@@ -569,7 +569,7 @@ static void __batt_meter_parse_table(const struct device_node *np,
 int __batt_meter_init_cust_data_from_dt(void)
 {
 	struct device_node *np;
-	int num;
+	int num = 0;
 	unsigned int idx, addr, val;
 
 	/* check customer setting */
@@ -3565,16 +3565,23 @@ return cw2015_get_capacity();
 #if defined(SOC_BY_SW_FG)
 	oam_run();
 #if !defined(CUST_CAPACITY_OCV2CV_TRANSFORM)
+#ifdef OAM_D5
 #if (OAM_D5 == 1)
-	return 100 - oam_d_5;
+       return 100 - oam_d_5;
 #else
-	return 100 - oam_d_2;
+       return 100 - oam_d_2;
+#endif
+#else
+    if(batt_meter_cust_data.oam_d5 == 1)
+                return 100 - oam_d_5;
+        else
+                return 100 - oam_d_2;
 #endif
 #else
 #if (OAM_D5 == 1)
-	return 100 - battery_meter_trans_battery_percentage(oam_d_5);
+        return 100 - battery_meter_trans_battery_percentage(oam_d_5);
 #else
-	return 100 - battery_meter_trans_battery_percentage(oam_d_2);
+        return 100 - battery_meter_trans_battery_percentage(oam_d_2);
 #endif
 #endif
 #endif
