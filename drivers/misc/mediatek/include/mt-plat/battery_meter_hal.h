@@ -10,7 +10,7 @@
 
 #define bm_print(num, fmt, args...)   \
 do {									\
-/*	if (Enable_FGADC_LOG >= (int)num)*/ {				\
+	if (Enable_FGADC_LOG >= (int)num) {				\
 		pr_debug(fmt, ##args); \
 	}								   \
 } while (0)
@@ -88,6 +88,7 @@ typedef enum {
 
 	BATTERY_METER_CMD_GET_HW_OCV,
 	BATTERY_METER_CMD_DUMP_REGISTER,
+	BATTERY_METER_CMD_EXT_HW_FG,
 	BATTERY_METER_CMD_SET_COLUMB_INTERRUPT,
 	BATTERY_METER_CMD_GET_BATTERY_PLUG_STATUS,
 	BATTERY_METER_CMD_GET_HW_FG_CAR_ACT,	/* fgauge_read_columb */

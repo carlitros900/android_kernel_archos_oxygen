@@ -456,7 +456,7 @@ static s32 goodix_tool_write(struct file *filp, const char __user *buff, unsigne
 		tpd_irq_registration();
 #endif
 	/* mt_eint_unmask(CUST_EINT_TOUCH_PANEL_NUM); */
-	if(false == tpdIrqIsEnabled) {
+	if((false == tpdIrqIsEnabled) && (1 == tpdGPIOTiedtoIRQ)) {
 		enable_irq(touch_irq);
 		tpdIrqIsEnabled = true;
 	}
@@ -492,6 +492,13 @@ static s32 goodix_tool_write(struct file *filp, const char __user *buff, unsigne
 	} else if (15 == cmd_head.wr) {
 		show_len = 0;
 		total_len = 0;
+		if ((cmd_head.data == NULL)
+			|| (cmd_head.data_len >= DATA_LENGTH)
+			|| (cmd_head.data_len >= (len - CMD_HEAD_LENGTH))) {
+			GTP_ERROR("copy_from_user data out of range.");
+			return -EINVAL;
+		}
+
 		memset(cmd_head.data, 0, cmd_head.data_len + 1);
 		ret = copy_from_user(cmd_head.data, &buff[CMD_HEAD_LENGTH], cmd_head.data_len);
 		if (ret)
@@ -501,6 +508,7 @@ static s32 goodix_tool_write(struct file *filp, const char __user *buff, unsigne
 			return FAIL;
 	}
 #endif
+#if 0
 	else if (19 == cmd_head.wr)	{
 		ret = copy_from_user(&cmd_head.data[0], &buff[CMD_HEAD_LENGTH], cmd_head.data_len);
 		if (0 == cmd_head.data[0]) {
@@ -517,6 +525,7 @@ static s32 goodix_tool_write(struct file *filp, const char __user *buff, unsigne
 				return FAIL;
 		}
 	}
+#endif
 #if defined(CONFIG_HOTKNOT_BLOCK_RW)
 	else if (21 == cmd_head.wr) {
 		u16 wait_hotknot_timeout = 0;

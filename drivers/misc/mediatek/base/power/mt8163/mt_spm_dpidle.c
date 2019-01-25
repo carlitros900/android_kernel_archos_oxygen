@@ -477,8 +477,15 @@ wake_reason_t spm_go_to_dpidle(u32 spm_flags, u32 spm_data)
 
 	__spm_kick_pcm_to_run(pwrctrl);
 
+#ifdef CONFIG_MD32_SUPPORT
+	write_md32_cfgreg((read_md32_cfgreg(0x2C) & ~0xFFFF) | 0xcafe, 0x2C);
+#endif
+
 	spm_trigger_wfi_for_dpidle(pwrctrl);
 
+#ifdef CONFIG_MD32_SUPPORT
+	write_md32_cfgreg((read_md32_cfgreg(0x2C) & ~0xFFFF) | 0xbeef, 0x2C);
+#endif
 	__spm_get_wakeup_status(&wakesta);
 
 	__spm_clean_after_wakeup();

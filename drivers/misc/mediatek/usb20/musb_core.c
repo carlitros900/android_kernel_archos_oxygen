@@ -115,6 +115,10 @@
 #include "mtk_musb.h"
 struct device_node *dts_np;
 #endif
+#include <linux/of_irq.h>
+#include <linux/of_address.h>
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 int musb_is_shutting = 0;
 int musb_skip_charge_detect = 0;
@@ -2400,7 +2404,7 @@ static int musb_probe(struct platform_device *pdev)
 	usb_mac_base = (unsigned long)base;
 	usb_phy_base = (unsigned long)pbase;
 	irq = usb_irq_number;
-	pr_err("musb probe reg: 0x%lx ,0x%lx , irq: 0x%d\n", usb_mac_base, usb_phy_base,
+	pr_info("musb probe reg: 0x%lx ,0x%lx , irq: 0x%d\n", usb_mac_base, usb_phy_base,
 		usb_irq_number);
 #endif
 #ifdef CONFIG_OF
@@ -2566,13 +2570,7 @@ static int musb_suspend_noirq(struct device *dev)
 	usb_enable_clock(false);
 	mtk_usb_power = false;
 
-#if 0
-/*#ifndef CONFIG_MTK_CLKMGR*/
-	clk_unprepare(usb_clk);
-	clk_unprepare(usbmcu_clk);
-	clk_unprepare(usbpll_clk);
-#endif
-
+	usb_pre_clock(false);
 	/*spin_unlock_irqrestore(&musb->lock, flags); */
 	return 0;
 }
@@ -2582,13 +2580,7 @@ static int musb_resume_noirq(struct device *dev)
 {
 	struct musb *musb = dev_to_musb(dev);
 
-#if 0
-/*#ifndef CONFIG_MTK_CLKMGR*/
-	clk_prepare(usbpll_clk);
-	clk_prepare(usbmcu_clk);
-	clk_prepare(usb_clk);
-#endif
-
+       usb_pre_clock(true);
 	/*Turn on USB clock, before writing a batch of regs */
 	mtk_usb_power = true;
 	usb_enable_clock(true);

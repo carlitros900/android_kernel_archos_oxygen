@@ -1128,6 +1128,11 @@ static void send_file_work(struct work_struct *data)
 	offset = dev->xfer_file_offset;
 	count = dev->xfer_file_length;
 
+	if (count < 0) {
+		dev->xfer_result = -EINVAL;
+		return;
+	}
+
 	DBG(cdev, "send_file_work(%lld %lld)\n", offset, count);
 
 	if (dev->xfer_send_header) {
@@ -1301,6 +1306,11 @@ static void receive_file_work(struct work_struct *data)
 	filp = dev->xfer_file;
 	offset = dev->xfer_file_offset;
 	count = dev->xfer_file_length;
+
+	if (count < 0) {
+		dev->xfer_result = -EINVAL;
+		return;
+	}
 
 	DBG(cdev, "receive_file_work(%lld)\n", count);
 
@@ -1647,7 +1657,7 @@ static int mtp_release(struct inode *ip, struct file *fp)
 {
     unsigned long flags;
 
-    printk(KERN_INFO "mtp_release\n");
+	printk(KERN_INFO "mtp_release\n");
 
     spin_lock_irqsave(&_mtp_dev->lock, flags);
 
@@ -1657,8 +1667,8 @@ static int mtp_release(struct inode *ip, struct file *fp)
     } else
         spin_unlock_irqrestore(&_mtp_dev->lock, flags);
 
-    mtp_unlock(&_mtp_dev->open_excl);
-    return 0;
+	mtp_unlock(&_mtp_dev->open_excl);
+	return 0;
 }
 
 /* file operations for /dev/mtp_usb */

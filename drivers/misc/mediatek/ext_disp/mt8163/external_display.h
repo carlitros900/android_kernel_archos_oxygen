@@ -69,7 +69,7 @@ typedef struct {
 
 extern int primary_display_wait_for_vsync(void *config);
 extern int dprec_mmp_dump_ovl_layer(OVL_CONFIG_STRUCT *ovl_layer, unsigned int l,
-					unsigned int session);
+				    unsigned int session);
 extern int get_extd_fps_time(void);
 extern bool is_hdmi_active(void);
 #ifdef EXTD_DBG_USE_INNER_BUF

@@ -91,3 +91,28 @@ config MTK_BTCVSD_ALSA
 	default n
 	help
         If you say Y, enable MTK_BTCVSD_ALSA.
+
+config AW8736_SPEAKER_AMP
+    bool "AW8738_SPEAKER_AMP"
+       default n
+       help
+        If you say Y, enable MT_SND_SOC_8163_driver.
+
+config AW8738_SPEAKER_AMP
+    bool "AW8738_SPEAKER_AMP"
+       default n
+       help
+        If you say Y, enable MT_SND_SOC_8163_driver.
+
+config EXT_HP_AMP
+    bool "Extenal hp amp"
+       default n
+       help
+        If you say Y, enable EXT_HP_AMP.
+
+config TPA6130A_HP_AMP
+    bool "TPA6130A HP AMP"
+       depends on EXT_HP_AMP
+       default n
+       help
+        If you say Y, enable TPA6130A_HP_AMP.

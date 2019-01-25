@@ -155,6 +155,15 @@ void arc_cache_init(void)
 
 	printk(arc_cache_mumbojumbo(0, str, sizeof(str)));
 
+	/*
+	 * Only master CPU needs to execute rest of function:
+	 *  - Assume SMP so all cores will have same cache config so
+	 *    any geomtry checks will be same for all
+	 *  - IOC setup / dma callbacks only need to be setup once
+	 */
+	if (cpu)
+		return;
+
 	if (IS_ENABLED(CONFIG_ARC_HAS_ICACHE)) {
 		struct cpuinfo_arc_cache *ic = &cpuinfo_arc700[cpu].icache;
 
@@ -633,7 +642,7 @@ void flush_cache_mm(struct mm_struct *mm)
 void flush_cache_page(struct vm_area_struct *vma, unsigned long u_vaddr,
 		      unsigned long pfn)
 {
-	unsigned int paddr = pfn << PAGE_SHIFT;
+	phys_addr_t paddr = pfn << PAGE_SHIFT;
 
 	u_vaddr &= PAGE_MASK;
 
@@ -653,8 +662,9 @@ void flush_anon_page(struct vm_area_struct *vma, struct page *page,
 		     unsigned long u_vaddr)
 {
 	/* TBD: do we really need to clear the kernel mapping */
-	__flush_dcache_page(page_address(page), u_vaddr);
-	__flush_dcache_page(page_address(page), page_address(page));
+	__flush_dcache_page((phys_addr_t)page_address(page), u_vaddr);
+	__flush_dcache_page((phys_addr_t)page_address(page),
+			    (phys_addr_t)page_address(page));
 
 }
 

@@ -961,6 +961,7 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 
 		raw_spin_lock(&rq->lock);
 		per_cpu(rt_period_time, i) = rq_clock_task(rq);
+		update_rq_clock(rq);
 
 		if (rt_rq->rt_time) {
 			u64 runtime;
@@ -980,9 +981,9 @@ static int do_sched_rt_period_timer(struct rt_bandwidth *rt_b, int overrun)
 			/* sched:print throttle*/
 			if (rt_rq->rt_throttled) {
 				printk_deferred("sched: cpu=%d, [%llu -> %llu]",
-						i, rt_time_pre, rt_rq->rt_time);
+						i, rt_time_pre = 0, rt_rq->rt_time);
 				printk_deferred(" -= min(%llu, %d*[%llu -> %llu])\n",
-						rt_time_pre, overrun, runtime_pre, runtime);
+						rt_time_pre = 0, overrun, runtime_pre = 0, runtime);
 			}
 			if (rt_rq->rt_throttled && rt_rq->rt_time < runtime) {
 				/* sched:print throttle*/

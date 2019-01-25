@@ -244,7 +244,7 @@ static struct pcm_desc suspend_pcm = {
 #define WAKE_SRC_FOR_SUSPEND                                                          \
 		(WAKE_SRC_MD32_WDT | WAKE_SRC_KP | WAKE_SRC_CONN2AP | WAKE_SRC_EINT | WAKE_SRC_CONN_WDT |\
 		WAKE_SRC_MD32_SPM | WAKE_SRC_USB_CD | WAKE_SRC_USB_PDN |\
-		WAKE_SRC_SEJ | WAKE_SRC_ALL_MD32)
+		WAKE_SRC_ALL_MD32)
 
 #define WAKE_SRC_FOR_MD32  0                                          \
 				/* (WAKE_SRC_AUD_MD32) */
@@ -559,8 +559,7 @@ static u32 spm_get_wake_period(int pwake_time, wake_reason_t last_wr)
 
 	if (pwake_time < 0) {
 		/* use FG to get the period of 1% battery decrease */
-/*		period = get_dynamic_period(last_wr != WR_PCM_TIMER ? 1 : 0, SPM_WAKE_PERIOD, 1); */
-		period = 5400;
+		period = get_dynamic_period(last_wr != WR_PCM_TIMER ? 1 : 0, SPM_WAKE_PERIOD, 1);
 		if (period <= 0) {
 			spm_warn("CANNOT GET PERIOD FROM FUEL GAUGE\n");
 			period = SPM_WAKE_PERIOD;

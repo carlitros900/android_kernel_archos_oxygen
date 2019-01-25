@@ -13,6 +13,8 @@
 
 #include <linux/ioctl.h>
 #include <cust_acc.h>
+#include <linux/module.h>
+#include <hwmsensor.h>
 
 #define SCP_SENSOR_HUB_TEMP_BUFSIZE     256
 

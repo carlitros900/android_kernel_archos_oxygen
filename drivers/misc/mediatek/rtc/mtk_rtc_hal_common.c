@@ -285,22 +285,6 @@ void rtc_lp_exception(void)
 	mdelay(2000);
 	sec2 = rtc_read(RTC_TC_SEC);
 
-	/***********add the below******************/
-	con = rtc_read(RTC_CON) | RTC_CON_LPEN;
-	con &= ~RTC_CON_LPRST;
-	rtc_write(RTC_CON, con);
-	rtc_write_trigger();
-
-	con |= RTC_CON_LPRST;
-	rtc_write(RTC_CON, con);
-	rtc_write_trigger();
-
-	con &= ~RTC_CON_LPRST;
-	rtc_write(RTC_CON, con);
-	rtc_write_trigger();
-	/***********end******************/
-
-
 	hal_rtc_xfatal("!!! 32K WAS STOPPED !!!\n"
 		       "RTC_BBPU      = 0x%x\n"
 		       "RTC_IRQ_STA   = 0x%x\n"

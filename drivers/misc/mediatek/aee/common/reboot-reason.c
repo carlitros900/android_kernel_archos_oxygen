@@ -96,32 +96,14 @@ static ssize_t powerup_reason_show(struct kobject *kobj, struct kobj_attribute *
 		return 0;
 
 }
+
 static struct kobj_attribute powerup_reason_attr = __ATTR_RO(powerup_reason);
-
-static ssize_t security_efuse_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-        int iefuse = 0;
-        char *br_ptr;
-
-        br_ptr = strstr(saved_command_line, "androidboot.efuse=");
-        if (br_ptr != 0) {
-                /* get boot reason */
-                iefuse = br_ptr[18] - '0';
-                LOGE("androidboot.efuse=%d\n", iefuse);
-                return sprintf(buf, "%s\n", iefuse > 0 ? "OK" : "NG");
-        } else
-                return 0;
-
-}
-
-static struct kobj_attribute security_efuse_attr = __ATTR_RO(security_efuse);
 
 struct kobject *bootinfo_kobj;
 EXPORT_SYMBOL(bootinfo_kobj);
 
 static struct attribute *bootinfo_attrs[] = {
 	&powerup_reason_attr.attr,
-        &security_efuse_attr.attr,
 	NULL
 };
 

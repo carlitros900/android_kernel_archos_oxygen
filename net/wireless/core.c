@@ -94,6 +94,9 @@ int cfg80211_dev_rename(struct cfg80211_registered_device *rdev,
 
 	ASSERT_RTNL();
 
+	if (strlen(newname) > NL80211_WIPHY_NAME_MAXLEN)
+		return -EINVAL;
+
 	/* prohibit calling the thing phy%d when %d is not its number */
 	sscanf(newname, PHY_NAME "%d%n", &wiphy_idx, &taken);
 	if (taken == strlen(newname) && wiphy_idx != rdev->wiphy_idx) {
@@ -1038,6 +1041,8 @@ static int cfg80211_netdev_notifier_call(struct notifier_block *nb,
 	default:
 		return NOTIFY_DONE;
 	}
+
+	wireless_nlevent_flush();
 
 	return NOTIFY_OK;
 }

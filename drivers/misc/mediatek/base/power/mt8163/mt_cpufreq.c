@@ -1370,9 +1370,9 @@ int mt_cpufreq_update_volt(enum mt_cpu_dvfs_id id, unsigned int *volt_tbl, int n
 	for (i = 0; i < nr_volt_tbl; i++)
 		p->opp_tbl[i].cpufreq_volt = PMIC_VAL_TO_VOLT(volt_tbl[i]);
 
-	/* set volt */
-	ret = _set_cur_volt_locked(p,
-	   TURBO_MODE_VOLT(get_turbo_mode(p, cpu_dvfs_get_cur_freq(p)),
+		/* set volt */
+		ret = _set_cur_volt_locked(p,
+		   TURBO_MODE_VOLT(get_turbo_mode(p, cpu_dvfs_get_cur_freq(p)),
 		   cpu_dvfs_get_cur_volt(p)));
 
 	cpufreq_unlock(flags);
@@ -2200,11 +2200,6 @@ out:
 
 static unsigned int _calc_new_opp_idx(struct mt_cpu_dvfs *p, int new_opp_idx);
 
-
-#ifdef CONFIG_LIMIT_CPU_714MHZ_WHEN_THERMAL_UP_80C
-extern int cpu_temp_upto_80;
-#endif
-
 static void _mt_cpufreq_set(enum mt_cpu_dvfs_id id, int new_opp_idx)
 {
 	unsigned long flags;
@@ -2233,23 +2228,10 @@ static void _mt_cpufreq_set(enum mt_cpu_dvfs_id id, int new_opp_idx)
 	if (do_dvfs_stress_test)
 		new_opp_idx = jiffies & 0x7; /* 0~7 */
 	else {
-#ifdef CONFIG_LIMIT_CPU_714MHZ_WHEN_THERMAL_UP_80C
-		//printk("=====%s %d cpu_temp_upto_80 =%d =====\n",__func__, __LINE__, cpu_temp_upto_80);
-		if (cpu_temp_upto_80) {
-			new_opp_idx = 5;
-//			printk("=====>%s %d new_opp_idx=%d=====\n",__func__, __LINE__, new_opp_idx);
-		}
-#endif
 #if defined(CONFIG_CPU_DVFS_BRINGUP)
 		new_opp_idx = id_to_cpu_dvfs(id)->idx_normal_max_opp;
 #else
 	new_opp_idx = _calc_new_opp_idx(id_to_cpu_dvfs(id), new_opp_idx);
-#endif
-#ifdef CONFIG_LIMIT_CPU_714MHZ_WHEN_THERMAL_UP_80C
-		if (cpu_temp_upto_80) {
-			new_opp_idx = 5;
-//			printk("=====>%s %d new_opp_idx=%d=====\n",__func__, __LINE__, new_opp_idx);
-		}
 #endif
 	}
 

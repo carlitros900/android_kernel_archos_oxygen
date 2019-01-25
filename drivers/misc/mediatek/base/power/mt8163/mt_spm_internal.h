@@ -212,6 +212,9 @@ struct pwr_ctrl {
 	u32 param1;
 	u32 param2;
 	u32 param3;
+
+	/* for logging */
+	u8 enable_log;
 };
 
 struct wake_status {

@@ -104,6 +104,7 @@ struct tpd_filter_t {
 
 struct tpd_dts_info {
 	int tpd_resolution[2];
+	int tpd_convert_ratio[2];
 	int touch_max_num;
 	int use_tpd_button;
 	int tpd_key_num;

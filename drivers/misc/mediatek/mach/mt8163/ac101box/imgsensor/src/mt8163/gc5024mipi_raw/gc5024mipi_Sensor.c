@@ -50,7 +50,7 @@ kal_bool GC5024DuringTestPattern = KAL_FALSE;
 static imgsensor_info_struct imgsensor_info = {
     .sensor_id = GC5024MIPI_SENSOR_ID,        //record sensor id defined in Kd_imgsensor.h
 
-    .checksum_value = 0x8c03731d,//0xf7375923,        //checksum value for Camera Auto Test
+    .checksum_value = 0x4ac17021,         //0x8c03731d,//0xf7375923,        //checksum value for Camera Auto Test
 
     .pre = {
         .pclk = 54000000,                //record different mode's pclk

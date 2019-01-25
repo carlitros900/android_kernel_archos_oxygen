@@ -67,8 +67,7 @@ typedef enum {
 }CHARGER_TYPE;
 
 extern void wake_up_bat(void);
-extern CHARGER_TYPE mt_charger_type_detection(void);
-extern CHARGER_TYPE mt_get_charger_type(void);
+extern enum CHARGER_TYPE mt_charger_type_detection(void);
 extern bool upmu_is_chr_det(void);
 extern kal_uint32 upmu_get_rgs_chrdet(void);
 extern void BATTERY_SetUSBState(int usb_state);

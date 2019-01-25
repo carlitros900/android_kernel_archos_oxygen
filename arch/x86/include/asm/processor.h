@@ -669,7 +669,7 @@ static inline void sync_core(void)
 {
 	int tmp;
 
-#ifdef CONFIG_M486
+#ifdef CONFIG_X86_32
 	/*
 	 * Do a CPUID if available, otherwise do a jump.  The jump
 	 * can conveniently enough be the jump around CPUID.
@@ -852,7 +852,8 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
 #define task_pt_regs(task)                                             \
 ({                                                                     \
        struct pt_regs *__regs__;                                       \
-       __regs__ = (struct pt_regs *)(KSTK_TOP(task_stack_page(task))-8); \
+       __regs__ = (struct pt_regs *)(KSTK_TOP(task_stack_page(task)) - \
+				     TOP_OF_KERNEL_STACK_PADDING);     \
        __regs__ - 1;                                                   \
 })
 

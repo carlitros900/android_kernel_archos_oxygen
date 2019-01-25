@@ -1093,11 +1093,8 @@ static int mtk_uart_vfifo_create(struct mtk_uart *uart)
 		return err;
 	}
 
-	MSG_RAW("[UART%2d] create\n", uart->nport);
-
 	for (idx = uart->nport * 2; idx < uart->nport * 2 + 2; idx++) {
 		vfifo = &mtk_uart_vfifo_port[idx];
-		MSG_RAW("[UART%2d] idx=%2d\n", uart->nport, idx);
 		if (vfifo->size) {
 			vfifo->addr = dma_alloc_coherent(uart->port.dev, vfifo->size, &vfifo->dmahd, GFP_DMA);
 			/* MSG_RAW("Address: virt = 0x%p, phys = 0x%llx\n", vfifo->addr, vfifo->dmahd); */
@@ -1111,9 +1108,7 @@ static int mtk_uart_vfifo_create(struct mtk_uart *uart)
 		err = mtk_uart_vfifo_new_dbgbuf(vfifo);
 		if (err)
 			break;
-		MSG_RAW("[%2d] %p (%04d) ;\n", idx, vfifo->addr, vfifo->size);
 	}
-	MSG_RAW("\n");
 	return err;
 }
 
@@ -2418,7 +2413,6 @@ static int mtk_uart_syscore_suspend(void)
 		/* tx pin:  idle->high   power down->low */
 		mtk_uart_switch_tx_to_gpio(uart);
 		spin_unlock_irqrestore(&mtk_uart_bt_lock, flags);
-		pr_debug("[UART%d] Suspend(%d)!\n", uart->nport, ret);
 	}
 	return ret;
 }
@@ -2437,7 +2431,6 @@ static void mtk_uart_syscore_resume(void)
 		ret = uart_resume_port(&mtk_uart_drv, &uart->port);
 		spin_unlock_irqrestore(&mtk_uart_bt_lock, flags);
 		disable_irq(uart->port.irq);
-		pr_debug("[UART%d] Resume(%d)!\n", uart->nport, ret);
 	}
 }
 
@@ -2452,7 +2445,6 @@ static int mtk_uart_suspend(struct platform_device *pdev, pm_message_t state)
 		mtk_uart_save(uart);
 	if (uart && (uart->nport < UART_NR) && (uart != bt_port)) {
 		ret = uart_suspend_port(&mtk_uart_drv, &uart->port);
-		pr_debug("[UART%d] Suspend(%d)!\n", uart->nport, ret);
 		mtk_uart_switch_rx_to_gpio(uart);
 	}
 	return ret;
@@ -2467,7 +2459,6 @@ static int mtk_uart_resume(struct platform_device *pdev)
 	if (uart && (uart->nport < UART_NR) && (uart != bt_port)) {
 		mtk_uart_switch_to_rx(uart);
 		ret = uart_resume_port(&mtk_uart_drv, &uart->port);
-		pr_debug("[UART%d] Resume(%d)!\n", uart->nport, ret);
 	}
 	return ret;
 }
@@ -2751,6 +2742,7 @@ static const struct of_device_id apuart_of_ids[] = {
 	{.compatible = "mediatek,mt8173-uart",},
 	{.compatible = "mediatek,mt6797-uart",},
 	{.compatible = "mediatek,mt8163-uart",},
+	{.compatible = "mediatek,mt8127-uart",},
 	{}
 };
 #endif

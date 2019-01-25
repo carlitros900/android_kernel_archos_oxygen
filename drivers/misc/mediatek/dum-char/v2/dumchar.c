@@ -451,8 +451,8 @@ static ssize_t dumchar_read(struct file *filp, char __user *buf, size_t count, l
 	if (fo->act_filp == (struct file *)0xffffffff) {
 		pr_err("[dumchar_read] It is forbidded to access %s with dumchar(/dev/%s),the %s partition is managed by filesystem!\n",
 				dev->dumname, dev->dumname, dev->dumname);
-		pr_debug("[dumchar_read] show_stack*************************************\n");
-		show_stack(NULL, NULL);
+		//pr_debug("[dumchar_read] show_stack*************************************\n");
+		//show_stack(NULL, NULL);
 		return -EINVAL;
 	}
 
@@ -502,8 +502,8 @@ ssize_t dumchar_write(struct file *filp, const char __user *buf, size_t count, l
 	if (fo->act_filp == (struct file *)0xffffffff) {
 		pr_err("[dumchar_write] It is forbidded to access %s with dumchar(/dev/%s),the %s partition is managed by filesystem!\n",
 			dev->dumname, dev->dumname, dev->dumname);
-		pr_debug("[dumchar_write] show_stack*************************************\n");
-		show_stack(NULL, NULL);
+		//pr_debug("[dumchar_write] show_stack*************************************\n");
+		//show_stack(NULL, NULL);
 		return -EINVAL;
 	}
 #ifdef CONFIG_MTK_COMBO_NAND_SUPPORT
@@ -583,8 +583,8 @@ static long dumchar_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 	if (fo->act_filp == (struct file *)0xffffffff) {
 		pr_err("[dumchar_ioctl] It is forbidded to access %s with dumchar(/dev/%s),the %s partition is managed by filesystem!\n",
 			dev->dumname, dev->dumname, dev->dumname);
-		pr_debug("[dumchar_loctl] show_stack*************************************\n");
-		show_stack(NULL, NULL);
+		//pr_debug("[dumchar_loctl] show_stack*************************************\n");
+		//show_stack(NULL, NULL);
 		return -EINVAL;
 	}
 
@@ -709,8 +709,8 @@ loff_t dumchar_llseek(struct file *filp, loff_t off, int whence)
 	if (fo->act_filp == (struct file *)0xffffffff) {
 		pr_err("[dumchar_llseek] It is forbidded to access %s with dumchar(/dev/%s),the %s partition is managed by filesystem!\n",
 			dev->dumname, dev->dumname, dev->dumname);
-		pr_debug("[dumchar_llseek] show_stack*************************************\n");
-		show_stack(NULL, NULL);
+		//pr_debug("[dumchar_llseek] show_stack*************************************\n");
+		//show_stack(NULL, NULL);
 		return -EINVAL;
 	}
 
@@ -782,8 +782,8 @@ int dumchar_open(struct inode *inode, struct file *filp)
 	    !strcmp(dev->dumname, "android") || !strcmp(dev->dumname, "fat")) {
 		pr_err("[dumchar_open] It is forbidded to access %s with dumchar(/dev/%s),the %s partition is managed by filesystem!\n",
 			dev->dumname, dev->dumname, dev->dumname);
-		pr_debug("[dumchar_open] show_stack*************************************\n");
-		show_stack(NULL, NULL);
+		//pr_debug("[dumchar_open] show_stack*************************************\n");
+		//show_stack(NULL, NULL);
 		fo->act_filp = (struct file *)0xffffffff;
 		kfree(fo);
 		return -EINVAL;
@@ -796,8 +796,8 @@ int dumchar_open(struct inode *inode, struct file *filp)
 		pr_err(" DumChar: [%s] open %s failed ( %s ).  fo->act_filp=%p!, result=%d\n",
 		     current->comm, dev->actname, filp->f_path.dentry->d_name.name,
 		     fo->act_filp, result);
-		pr_debug("[dumchar_open] show_stack*************************************\n");
-		show_stack(NULL, NULL);
+		//pr_debug("[dumchar_open] show_stack*************************************\n");
+		//show_stack(NULL, NULL);
 		/* pr_debug("[dumchar_open] BUG_ON*************************************\n"); */
 		/* BUG_ON(1); */
 		/* pr_debug("[dumchar_open] ************\n"); */

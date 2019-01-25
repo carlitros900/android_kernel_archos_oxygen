@@ -21,6 +21,7 @@ Author - MTKLinux HDMI Device Driver
 
 #define HDMI_ATTR_SPRINTF(fmt, arg...)  \
 do { \
+	pr_err(fmt, ##arg); \
 	temp_len = sprintf(buf , fmt , ##arg);	 \
 	buf += temp_len; \
 	len += temp_len; \
@@ -43,12 +44,11 @@ void mt_hdmi_show_edid_info(char *pbuf)
 	unsigned int u4Res = 0;
 	unsigned char bInx = 0;
 	char *buf;
-	int temp_len = 0;
 	int len = 0;
-
+	int temp_len = 0;
 	buf = pbuf;
 
-	pr_err(">> mt_hdmi_show_edid_info\n");
+	HDMI_ATTR_SPRINTF(">>>>> HDMI Edid Information >>>>>>>\n");
 
 	HDMI_ATTR_SPRINTF("[HDMI]EDID ver:%d/rev:%d\n", _HdmiSinkAvCap.ui1_Edid_Version,
 			  _HdmiSinkAvCap.ui1_Edid_Revision);
@@ -327,47 +327,64 @@ void mt_hdmi_show_edid_info(char *pbuf)
 		HDMI_ATTR_SPRINTF("[HDMI]No 3D_present\n");
 
 
-	pr_err("<< mt_hdmi_show_edid_info\n");
+	HDMI_ATTR_SPRINTF("<<<<<< HDMI Edid Information <<<<<<");
 
 }
 
-
-
-
-
-void mt_hdmi_debug_write(char *pbuf)
+void read_hdmi_regs(void)
 {
-	int var;
-	/* u32 reg; */
-	unsigned int hdcp_state;
-	/* unsigned int val; */
+	unsigned int i;
+
+	for (i = 0; i < 0x9; i++)
+		HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x14015014 + i * 4, bReadByteHdmiGRL(0x14 + i * 4));
+	for (i = 0; i < 0x2; i++)
+		HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x140150b8 + i * 4, bReadByteHdmiGRL(0xb8 + i * 4));
+	for (i = 0; i < 0xa; i++)
+		HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x14015154 + i * 4, bReadByteHdmiGRL(0x154 + i * 4));
+	for (i = 0; i < 0x4; i++)
+		HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x1401518c + i * 4, bReadByteHdmiGRL(0x18c + i * 4));
+	for (i = 0; i < 0x1; i++)
+		HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x140151c4 + i * 4, bReadByteHdmiGRL(0x1c4 + i * 4));
+	for (i = 0; i < 0x2; i++)
+		HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x14015200 + i * 4, bReadByteHdmiGRL(0x200 + i * 4));
+	for (i = 0; i < 0x2; i++)
+		HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x14015260 + i * 4, bReadByteHdmiGRL(0x260 + i * 4));
+}
+
+void read_pll_regs(void)
+{
+	HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x10209000, dReadIoPll(0x0));
+	HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x10209040, dReadIoPll(0x40));
+	HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x10209260, dReadIoPll(0x260));
+	HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x10209264, dReadIoPll(0x264));
+	HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x1020926c, dReadIoPll(0x26c));
+	HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x14000110, dReadHdmiSYS(0x110));
+	HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x14000900, dReadHdmiSYS(0x900));
+	HDMI_PLL_LOG("0x%08x = 0x%08x\n", 0x14000904, dReadHdmiSYS(0x904));
+}
+
+void hdmi_diagnosis(void)
+{
+	read_pll_regs();
+	read_hdmi_regs();
+
+}
+
+void hdmistatuslog(char *pbuf)
+{
 	char *buf;
 	int temp_len = 0;
 	int len = 0;
-	int ret;
 
 	buf = pbuf;
 
-	if (strncmp(buf, "dbgtype:", 8) == 0) {
-		ret =	sscanf(buf + 8, "%x", &var);
-		hdmidrv_log_on = var;
-		pr_err("hdmidrv_log_on = 0x%08x\n", (unsigned int)hdmidrv_log_on);
-	}
-
-	else if (strncmp(buf, "hdcp:", 5) == 0) {
-		ret = sscanf(buf + 5, "%x", &hdcp_state);
-		_bHdcpOff = (unsigned char)hdcp_state;
-		pr_err("current hdcp status = %c\n", _bHdcpOff);
-		vHDCPReset();
-		vHDCPInitAuth();
-	} else if (strncmp(buf, "status", 6) == 0) {
 		if (hdmi_powerenable)
 			HDMI_ATTR_SPRINTF("[hdmi]hdmi power on\n");
 		else
 			HDMI_ATTR_SPRINTF("[hdmi]hdmi power off\n");
 
 		HDMI_ATTR_SPRINTF("[hdmi]current connect state : %d\n ", mt_hdmi_get_state());
-		HDMI_ATTR_SPRINTF("[hdmi]dbgtype : %lx\n", hdmidrv_log_on);
+	HDMI_ATTR_SPRINTF("[hdmi]dbgtype : %lx\n", hdmidrv_log_on);
 		if (i4SharedInfo(SI_HDMI_RECEIVER_STATUS) == HDMI_PLUG_IN_ONLY)
 			HDMI_ATTR_SPRINTF("[hdmi]SI_HDMI_RECEIVER_STATUS = HDMI_PLUG_IN_ONLY\n");
 		else if (i4SharedInfo(SI_HDMI_RECEIVER_STATUS) == HDMI_PLUG_IN_AND_SINK_POWER_ON)
@@ -382,8 +399,7 @@ void mt_hdmi_debug_write(char *pbuf)
 		else
 			HDMI_ATTR_SPRINTF("[hdmi]hdcp on\n");
 		HDMI_ATTR_SPRINTF("[hdmi]video resolution : %d\n", _stAvdAVInfo.e_resolution);
-		HDMI_ATTR_SPRINTF("[hdmi]video color space : %d\n",
-				  _stAvdAVInfo.e_video_color_space);
+	HDMI_ATTR_SPRINTF("[hdmi]video color space : %d\n", _stAvdAVInfo.e_video_color_space);
 		HDMI_ATTR_SPRINTF("[hdmi]video deep color : %d\n", _stAvdAVInfo.e_deep_color_bit);
 		HDMI_ATTR_SPRINTF("[hdmi]audio fs : %d\n", _stAvdAVInfo.e_hdmi_fs);
 		if (vIsDviMode())
@@ -392,6 +408,55 @@ void mt_hdmi_debug_write(char *pbuf)
 			HDMI_ATTR_SPRINTF("[hdmi]hdmi Mode\n");
 
 		hdmi_hdmistatus();
+
+}
+
+void mt_hdmi_debug_write(const char *pbuf)
+{
+	int var;
+	unsigned int  reg;
+	unsigned int hdcp_state;
+	unsigned int val;
+	unsigned int vadr_regstart = 0;
+	unsigned int vadr_regend = 0;
+	char *buf;
+	int temp_len = 0;
+	int len = 0;
+	int ret;
+
+	buf = (char *)pbuf;
+
+	if (strncmp(buf, "dbgtype:", 8) == 0) {
+		ret =	sscanf(buf + 8, "%x", &var);
+		hdmidrv_log_on = var;
+		pr_err("hdmidrv_log_on = 0x%08x\n", (unsigned int)hdmidrv_log_on);
+	} else if (strncmp(buf, "w:", 2) == 0) {
+		ret = sscanf(buf+2, "%x=%x", &reg , &val);
+		if (ret > 0) {
+			pr_err("w:0x%08x=0x%08x\n", reg, val);
+			hdmi_write(reg, val);
+		}
+	} else if (strncmp(buf, "r:", 2) == 0) {
+		ret = sscanf(buf+2, "%x/%x", &vadr_regstart, &vadr_regend);
+		if (ret > 0) {
+			vadr_regend  &= 0x3ff;
+			HDMI_ATTR_SPRINTF("r:0x%08x/0x%08x\n", vadr_regstart, vadr_regend);
+			vadr_regend = vadr_regstart + vadr_regend;
+			while (vadr_regstart <= vadr_regend) {
+				hdmi_read(vadr_regstart, &val);
+				HDMI_ATTR_SPRINTF("0x%08x = 0x%08x\n", vadr_regstart, val);
+				vadr_regstart = vadr_regstart+4;
+			}
+		}
+	} else if (strncmp(buf, "hdcp:", 5) == 0) {
+		ret = sscanf(buf + 5, "%x", &hdcp_state);
+		_bHdcpOff = (unsigned char)hdcp_state;
+		pr_err("current hdcp status = %c\n", _bHdcpOff);
+		vHDCPReset();
+		vHDCPInitAuth();
+	} else if (strncmp(buf, "status", 6) == 0) {
+		hdmi_diagnosis();
+		hdmistatuslog(buf);
 	} else if (strncmp(buf, "edid", 4) == 0) {
 		mt_hdmi_show_edid_info(buf);
 	} else if (strncmp(buf, "mute:", 5) == 0) {
@@ -412,6 +477,10 @@ void mt_hdmi_debug_write(char *pbuf)
 		    ("[hdmi] please connect TV,turn off box cec function, and keep TV and box power on\n");
 	} else if (strncmp(buf, "testmode:off", 12) == 0) {
 		HDMI_ATTR_SPRINTF("[hdmi] abist off for debug, please chang resolution again\n");
+	} else if (0 == strncmp(buf, "irq:on", 6)) {
+		HDMI_EnableIrq();
+	} else if (0 == strncmp(buf, "irq:off", 7)) {
+		HDMI_DisableIrq();
 	} else if (strncmp(buf, "help", 4) == 0) {
 		HDMI_ATTR_SPRINTF("---hdmi debug system help---\n");
 		HDMI_ATTR_SPRINTF("please go in to sys/kernel/debug\n");
@@ -443,6 +512,8 @@ void mt_hdmi_debug_write(char *pbuf)
 		HDMI_ATTR_SPRINTF("[abist off] echo abist:off>hdmi\n");
 		HDMI_ATTR_SPRINTF("[hdmitx log on] echo log:on>hdmi\n");
 		HDMI_ATTR_SPRINTF("[hdmitx log off] echo log:off>hdmi\n");
+		HDMI_ATTR_SPRINTF("[Disable hdmi irq] echo irq:off>hdmi\n");
+		HDMI_ATTR_SPRINTF("[Enable hdmi irq] echo irq:on>hdmi\n");
 		HDMI_ATTR_SPRINTF("[help] echo help>hdmi;cat hdmi\n");
 	}
 }

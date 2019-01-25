@@ -8,6 +8,11 @@
 /*#define SOC_BY_AUXADC*/
 /*fg auxadc*/
 /*#define SOC_BY_HW_FG*/
+
+#ifdef CONFIG_MTK_BQ27520_SUPPORT
+#define SOC_BY_EXT_HW_FG
+#endif
+
 #define SOC_BY_SW_FG /*oam*/
 
 /*#define CONFIG_DIS_CHECK_BATTERY*/
@@ -72,7 +77,7 @@
 
 
 /* Discharge Percentage */
-#define OAM_D5		 1		/*  1 : D5,   0: D2*/
+//#define OAM_D5		 0		/*  1 : D5,   0: D2*/
 
 
 /* battery meter parameter */

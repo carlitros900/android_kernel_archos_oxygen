@@ -1451,16 +1451,18 @@ static int dbug_thread(void *unused)
 static ssize_t store_AUXADC_channel(struct device *dev, struct device_attribute *attr,
 				    const char *buf, size_t size)
 {
-	char start_flag;
+	char start_flag[10];
 	int error;
 
-	if (sscanf(buf, "%s", &start_flag) != 1) {
+	if (strlen(buf) != 1) {
 		pr_debug("[adc_driver]: Invalid values\n");
 		return -EINVAL;
 	}
-	pr_debug("[adc_driver] start flag =%d\n", start_flag);
-	g_start_debug_thread = start_flag;
-	if (1 == start_flag) {
+
+	snprintf(start_flag, sizeof(start_flag), "%s", buf);
+	pr_debug("[adc_driver] start flag =%d\n", start_flag[0]);
+	g_start_debug_thread = start_flag[0];
+	if ('1' == start_flag[0]) {
 		thread = kthread_run(dbug_thread, 0, "AUXADC");
 
 		if (IS_ERR(thread)) {
@@ -1473,6 +1475,81 @@ static ssize_t store_AUXADC_channel(struct device *dev, struct device_attribute 
 }
 
 static DEVICE_ATTR(AUXADC_read_channel, 0664, show_AUXADC_chanel, store_AUXADC_channel);
+
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+int hardware_version = 0;
+int hardware_adc_value = 0;
+
+static int read_hardware_version(void)
+{
+	int data[4] = {0,0,0,0}, value = 0, chn = 1;//AUXIN1 PIN
+	int ret =0;
+
+	ret = IMM_auxadc_GetOneChannelValue(chn,data,NULL);
+	if(ret < 0)
+	{
+		printk("[adc_driver]: get data error\n");
+	}
+	else
+	{
+		printk("[adc_driver]: channel[%d]=%d.%d \n", chn, data[0], data[1]);
+		value = (data[0]*100 + data[1]);
+
+		if((value == 0 || value < 40)){
+			hardware_version = 1;
+		}else if((value > 40) && (value <= 70)){
+			hardware_version = 2;
+		}else if((value > 70) && (value <= 100)){
+			hardware_version = 3;
+		}else if((value > 100) && (value <= 140)){
+			hardware_version = 4;
+		}else{
+			hardware_version = 0;
+		}
+	}
+
+	hardware_adc_value = value;
+
+	return ret;
+}
+
+static ssize_t show_AUXADC_read_hardware_version(struct device *dev,struct device_attribute *attr, char *buf)
+{
+	char buf_temp[255];
+	int ret = 0;
+
+	ret = read_hardware_version();
+	if(ret < 0)
+	{
+		sprintf(buf_temp,"AUXADC[1] Read Error!\n");
+	}
+	else
+	{
+		if((hardware_version == 1)){
+			sprintf(buf_temp,"ADC value  is (%d);another board\n", hardware_adc_value);
+		}else if(hardware_version == 2){
+			sprintf(buf_temp,"ADC value  is (%d);another board\n", hardware_adc_value);
+		}else if(hardware_version == 3){
+			sprintf(buf_temp,"ADC value  is (%d);it's an old board of F1005, have no fuel gauge\n", hardware_adc_value);
+		}else if(hardware_version == 4){
+			sprintf(buf_temp,"ADC value  is (%d);it's a new board of F1005, have fuel gauge\n", hardware_adc_value);
+		}else{
+			sprintf(buf_temp,"ADC value  is (%d);board:Unkown\n", hardware_adc_value);
+		}
+    }
+    strcat(buf, buf_temp);
+
+    return strlen(buf);
+}
+
+static ssize_t store_AUXADC_read_hardware_version(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
+{
+	printk("[EM] Not Support store_AUXADC_read_hardware_version\n");
+	return size;
+}
+
+static DEVICE_ATTR(AUXADC_hardware_version, 0664, show_AUXADC_read_hardware_version, store_AUXADC_read_hardware_version);
+#endif
 
 static int mt_auxadc_create_device_attr(struct device *dev)
 {
@@ -1617,6 +1694,11 @@ static int mt_auxadc_create_device_attr(struct device *dev)
 	ret = device_create_file(dev, &dev_attr_AUXADC_Channel_Is_Calibration);
 	if (ret != 0)
 		goto exit;
+		
+#if defined(CONFIG_MALATA_HARDWARE_VERSION)
+        if ((ret = device_create_file(dev, &dev_attr_AUXADC_hardware_version)) != 0)
+            goto exit;
+#endif
 
 	return 0;
 exit:
@@ -1834,6 +1916,10 @@ static int mt_auxadc_probe(struct platform_device *dev)
 
 	g_adc_init_flag = 1;
 
+    #if defined(CONFIG_MALATA_HARDWARE_VERSION)
+        read_hardware_version();
+    #endif
+	
 	if (mt_auxadc_create_device_attr(adc_dev))
 		goto exit;
 exit:
@@ -1922,3 +2008,4 @@ module_exit(mt_auxadc_exit);
 MODULE_AUTHOR("MTK");
 MODULE_DESCRIPTION("MTK AUXADC Device Driver");
 MODULE_LICENSE("GPL");
+

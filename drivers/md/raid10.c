@@ -1171,6 +1171,8 @@ static void __make_request(struct mddev *mddev, struct bio *bio)
 	int max_sectors;
 	int sectors;
 
+	md_write_start(mddev, bio);
+
 	/*
 	 * Register the new request and wait if the reconstruction
 	 * thread has put up a bar for new requests.
@@ -1512,11 +1514,24 @@ retry_write:
 			mbio->bi_private = r10_bio;
 
 			atomic_inc(&r10_bio->remaining);
+
+			cb = blk_check_plugged(raid10_unplug, mddev,
+					       sizeof(*plug));
+			if (cb)
+				plug = container_of(cb, struct raid10_plug_cb,
+						    cb);
+			else
+				plug = NULL;
 			spin_lock_irqsave(&conf->device_lock, flags);
-			bio_list_add(&conf->pending_bio_list, mbio);
-			conf->pending_count++;
+			if (plug) {
+				bio_list_add(&plug->pending, mbio);
+				plug->pending_cnt++;
+			} else {
+				bio_list_add(&conf->pending_bio_list, mbio);
+				conf->pending_count++;
+			}
 			spin_unlock_irqrestore(&conf->device_lock, flags);
-			if (!mddev_check_plugged(mddev))
+			if (!plug)
 				md_wakeup_thread(mddev->thread);
 		}
 	}
@@ -1556,8 +1571,6 @@ static void make_request(struct mddev *mddev, struct bio *bio)
 		return;
 	}
 
-	md_write_start(mddev, bio);
-
 	do {
 
 		/*
@@ -1578,7 +1591,25 @@ static void make_request(struct mddev *mddev, struct bio *bio)
 			split = bio;
 		}
 
+		/*
+		 * If a bio is splitted, the first part of bio will pass
+		 * barrier but the bio is queued in current->bio_list (see
+		 * generic_make_request). If there is a raise_barrier() called
+		 * here, the second part of bio can't pass barrier. But since
+		 * the first part bio isn't dispatched to underlaying disks
+		 * yet, the barrier is never released, hence raise_barrier will
+		 * alays wait. We have a deadlock.
+		 * Note, this only happens in read path. For write path, the
+		 * first part of bio is dispatched in a schedule() call
+		 * (because of blk plug) or offloaded to raid10d.
+		 * Quitting from the function immediately can change the bio
+		 * order queued in bio_list and avoid the deadlock.
+		 */
 		__make_request(mddev, split);
+		if (split != bio && bio_data_dir(bio) == READ) {
+			generic_make_request(bio);
+			break;
+		}
 	} while (split != bio);
 
 	/* In case raid10d snuck in to freeze_array */
@@ -2599,7 +2630,7 @@ static int narrow_write_error(struct r10bio *r10_bio, int i)
 				   choose_data_offset(r10_bio, rdev) +
 				   (sector - r10_bio->sector));
 		wbio->bi_bdev = rdev->bdev;
-		if (submit_bio_wait(WRITE, wbio) == 0)
+		if (submit_bio_wait(WRITE, wbio) < 0)
 			/* Failure! */
 			ok = rdev_set_badblocks(rdev, sector,
 						sectors, 0)
@@ -2723,7 +2754,8 @@ static void handle_write_completed(struct r10conf *conf, struct r10bio *r10_bio)
 		for (m = 0; m < conf->copies; m++) {
 			int dev = r10_bio->devs[m].devnum;
 			rdev = conf->mirrors[dev].rdev;
-			if (r10_bio->devs[m].bio == NULL)
+			if (r10_bio->devs[m].bio == NULL ||
+				r10_bio->devs[m].bio->bi_end_io == NULL)
 				continue;
 			if (test_bit(BIO_UPTODATE,
 				     &r10_bio->devs[m].bio->bi_flags)) {
@@ -2739,7 +2771,8 @@ static void handle_write_completed(struct r10conf *conf, struct r10bio *r10_bio)
 					md_error(conf->mddev, rdev);
 			}
 			rdev = conf->mirrors[dev].replacement;
-			if (r10_bio->devs[m].repl_bio == NULL)
+			if (r10_bio->devs[m].repl_bio == NULL ||
+				r10_bio->devs[m].repl_bio->bi_end_io == NULL)
 				continue;
 			if (test_bit(BIO_UPTODATE,
 				     &r10_bio->devs[m].repl_bio->bi_flags)) {
@@ -3581,6 +3614,7 @@ static struct r10conf *setup_conf(struct mddev *mddev)
 			/* far_copies must be 1 */
 			conf->prev.stride = conf->dev_sectors;
 	}
+	conf->reshape_safe = conf->reshape_progress;
 	spin_lock_init(&conf->device_lock);
 	INIT_LIST_HEAD(&conf->retry_list);
 
@@ -3685,6 +3719,7 @@ static int run(struct mddev *mddev)
 
 		if (blk_queue_discard(bdev_get_queue(rdev->bdev)))
 			discard_supported = true;
+		first = 0;
 	}
 
 	if (mddev->queue) {
@@ -3735,6 +3770,13 @@ static int run(struct mddev *mddev)
 			    disk->rdev->saved_raid_disk < 0)
 				conf->fullsync = 1;
 		}
+
+		if (disk->replacement &&
+		    !test_bit(In_sync, &disk->replacement->flags) &&
+		    disk->replacement->saved_raid_disk < 0) {
+			conf->fullsync = 1;
+		}
+
 		disk->recovery_disabled = mddev->recovery_disabled - 1;
 	}
 
@@ -3788,7 +3830,6 @@ static int run(struct mddev *mddev)
 		}
 		conf->offset_diff = min_offset_diff;
 
-		conf->reshape_safe = conf->reshape_progress;
 		clear_bit(MD_RECOVERY_SYNC, &mddev->recovery);
 		clear_bit(MD_RECOVERY_CHECK, &mddev->recovery);
 		set_bit(MD_RECOVERY_RESHAPE, &mddev->recovery);
@@ -4101,6 +4142,7 @@ static int raid10_start_reshape(struct mddev *mddev)
 				diff = 0;
 			if (first || diff < min_offset_diff)
 				min_offset_diff = diff;
+			first = 0;
 		}
 	}
 
@@ -4135,6 +4177,7 @@ static int raid10_start_reshape(struct mddev *mddev)
 		conf->reshape_progress = size;
 	} else
 		conf->reshape_progress = 0;
+	conf->reshape_safe = conf->reshape_progress;
 	spin_unlock_irq(&conf->device_lock);
 
 	if (mddev->delta_disks && mddev->bitmap) {
@@ -4201,6 +4244,7 @@ abort:
 		rdev->new_data_offset = rdev->data_offset;
 	smp_wmb();
 	conf->reshape_progress = MaxSector;
+	conf->reshape_safe = MaxSector;
 	mddev->reshape_position = MaxSector;
 	spin_unlock_irq(&conf->device_lock);
 	return ret;
@@ -4379,11 +4423,12 @@ static sector_t reshape_request(struct mddev *mddev, sector_t sector_nr,
 		allow_barrier(conf);
 	}
 
+	raise_barrier(conf, 0);
 read_more:
 	/* Now schedule reads for blocks from sector_nr to last */
 	r10_bio = mempool_alloc(conf->r10buf_pool, GFP_NOIO);
 	r10_bio->state = 0;
-	raise_barrier(conf, sectors_done != 0);
+	raise_barrier(conf, 1);
 	atomic_set(&r10_bio->remaining, 0);
 	r10_bio->mddev = mddev;
 	r10_bio->sector = sector_nr;
@@ -4488,6 +4533,8 @@ bio_full:
 	if (sector_nr <= last)
 		goto read_more;
 
+	lower_barrier(conf);
+
 	/* Now that we have done the whole section we can
 	 * update reshape_progress
 	 */
@@ -4555,6 +4602,7 @@ static void end_reshape(struct r10conf *conf)
 	md_finish_reshape(conf->mddev);
 	smp_wmb();
 	conf->reshape_progress = MaxSector;
+	conf->reshape_safe = MaxSector;
 	spin_unlock_irq(&conf->device_lock);
 
 	/* read-ahead size must cover two whole stripes, which is

@@ -66,6 +66,7 @@ static unsigned int ddp_ms2jiffies(unsigned long ms)
 {
 	return ((ms * HZ + 512) >> 10);
 }
+#endif
 static long disp_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	/*disp_node_struct *pNode = (disp_node_struct *)file->private_data; */
@@ -134,10 +135,10 @@ static int disp_mmap(struct file *file, struct vm_area_struct *a_pstVMArea)
 #ifdef DISP_SVP_DEBUG
 	a_pstVMArea->vm_page_prot = pgprot_noncached(a_pstVMArea->vm_page_prot);
 	if (remap_pfn_range(a_pstVMArea,
-				a_pstVMArea->vm_start,
-				a_pstVMArea->vm_pgoff,
-				(a_pstVMArea->vm_end - a_pstVMArea->vm_start),
-				a_pstVMArea->vm_page_prot)) {
+			    a_pstVMArea->vm_start,
+			    a_pstVMArea->vm_pgoff,
+			    (a_pstVMArea->vm_end - a_pstVMArea->vm_start),
+			    a_pstVMArea->vm_page_prot)) {
 		DDPMSG("MMAP failed!!\n");
 		return -1;
 	}
@@ -148,7 +149,6 @@ static int disp_mmap(struct file *file, struct vm_area_struct *a_pstVMArea)
 
 	return 0;
 }
-#endif
 
 struct dispsys_device {
 	void __iomem *regs[DISP_REG_NUM];
@@ -171,7 +171,7 @@ unsigned int ddp_reg_pa_base[DISP_REG_NUM] = {
 	0x1400F000, 0x14010000, 0x14011000, 0x14014000,
 	0x14018000, 0x14015000, 0x14012000, 0x14013000, 0x1401c000,
 	0x14000000, 0x14016000, 0x14017000, 0x10215000, 0x10000000, 0x100020F0, 0x10215000,
-		0x10215800, 0x14016200
+	    0x10215800, 0x14016200
 };
 
 unsigned int ddp_irq_num[DISP_REG_NUM] = {
@@ -327,7 +327,6 @@ const char *ddp_reg_name_spy(DISP_REG_ENUM reg)
 }
 
 /* Kernel interface */
-/*
 static const struct file_operations disp_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = disp_unlocked_ioctl,
@@ -337,7 +336,6 @@ static const struct file_operations disp_fops = {
 	.read = disp_read,
 	.mmap = disp_mmap
 };
-*/
 
 static int disp_probe(struct platform_device *pdev)
 {
@@ -407,16 +405,16 @@ static int disp_probe(struct platform_device *pdev)
 				/* IRQF_TRIGGER_NONE dose not take effect here, real trigger mode set in dts file */
 				if (ret) {
 					DDPERR
-						("Unable to request IRQ, request_irq fail, i=%d, irq=%d\n",
-						 i, dispsys_dev->irq[i]);
+					    ("Unable to request IRQ, request_irq fail, i=%d, irq=%d\n",
+					     i, dispsys_dev->irq[i]);
 					return ret;
 				}
 			}
 #endif
 		}
 		DDPMSG("DT, i=%d, module=%s, map_addr=%p, map_irq=%d, reg_pa=0x%x, irq=%d\n",
-			   i, ddp_get_reg_module_name(i), dispsys_dev->regs[i], dispsys_dev->irq[i],
-			   ddp_reg_pa_base[i], ddp_irq_num[i]);
+		       i, ddp_get_reg_module_name(i), dispsys_dev->regs[i], dispsys_dev->irq[i],
+		       ddp_reg_pa_base[i], ddp_irq_num[i]);
 	}
 	nr_dispsys_dev = new_count;
 	/* mipi tx reg map here */

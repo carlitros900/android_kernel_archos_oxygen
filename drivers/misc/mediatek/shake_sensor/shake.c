@@ -4,8 +4,8 @@ static struct shk_context *shk_context_obj;
 
 static struct shk_init_info *shake_init = { 0 };	/* modified */
 
-static void shk_early_suspend(struct early_suspend *h);
-static void shk_late_resume(struct early_suspend *h);
+//static void shk_early_suspend(struct early_suspend *h);
+//static void shk_late_resume(struct early_suspend *h);
 
 static int resume_enable_status;
 
@@ -179,7 +179,7 @@ static ssize_t shk_show_active(struct device *dev, struct device_attribute *attr
 	return snprintf(buf, PAGE_SIZE, "%d\n", cxt->is_active_data);
 }
 
-static ssize_t shk_store_delay(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t shk_store_delay(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	int len = 0;
 
@@ -233,7 +233,7 @@ static ssize_t shk_show_flush(struct device *dev, struct device_attribute *attr,
 
 static ssize_t shk_show_devnum(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	char *devname = NULL;
+	const char *devname = NULL;
 
 	devname = dev_name(&shk_context_obj->idev->dev);
 	return snprintf(buf, PAGE_SIZE, "%s\n", devname + 5);	/* TODO: why +5? */
@@ -310,7 +310,7 @@ static int shk_misc_init(struct shk_context *cxt)
 	int err = 0;
 	/* kernel-3.10\include\linux\Miscdevice.h */
 	/* use MISC_DYNAMIC_MINOR exceed 64 */
-	cxt->mdev.minor = M_SHK_MISC_MINOR;
+	cxt->mdev.minor = MISC_DYNAMIC_MINOR;
 	cxt->mdev.name = SHK_MISC_DEV_NAME;
 	err = misc_register(&cxt->mdev);
 	if (err)
@@ -478,30 +478,34 @@ static int shk_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#if 0
 static void shk_early_suspend(struct early_suspend *h)
 {
-#if 0
+
 	atomic_set(&(shk_context_obj->early_suspend), 1);
 	if (!atomic_read(&shk_context_obj->wake))	/* not wake up, disable in early suspend */
 		shk_real_enable(SHK_SUSPEND);
 
 	SHK_LOG(" shk_early_suspend ok------->hwm_obj->early_suspend=%d\n",
 		atomic_read(&(shk_context_obj->early_suspend)));
-	#endif
+
 }
+#endif
 
 /*----------------------------------------------------------------------------*/
+#if 0
 static void shk_late_resume(struct early_suspend *h)
 {
-#if 0
+
 	atomic_set(&(shk_context_obj->early_suspend), 0);
 	if (!atomic_read(&shk_context_obj->wake) && resume_enable_status)
 		shk_real_enable(SHK_RESUME);
 
 	SHK_LOG(" shk_late_resume ok------->hwm_obj->early_suspend=%d\n",
 		atomic_read(&(shk_context_obj->early_suspend)));
-	#endif
+	
 }
+#endif
 
 #if !defined(CONFIG_HAS_EARLYSUSPEND) || !defined(USE_EARLY_SUSPEND)
 static int shk_suspend(struct platform_device *dev, pm_message_t state)

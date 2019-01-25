@@ -189,7 +189,6 @@
 #define RTC_SPAR0_ENTER_KPOC				(1U << 8)
 #define RTC_SPAR0_EMERGENCY_DL_MODE		(1U << 9)
 #define RTC_SPAR0_LONG_PRESS_RST			(1U << 10)	/* mask for long press reset */
-#define RTC_SPAR0_HARD_RESET                                    (1U << 11) 
 
 /*
  * RTC_SPAR1:

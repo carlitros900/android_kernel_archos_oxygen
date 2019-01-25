@@ -28,6 +28,7 @@
 #define TZCMD_MEM_SECUREMEM_ZALLOC_WITH_TAG   19
 #define TZCMD_MEM_SECURECM_ZALLOC_WITH_TAG    20
 #define TZCMD_MEM_SHAREDMEM_REG_WITH_TAG      21
+#define TZCMD_MEM_USAGE_SECURECM              22
 
 /* data structure for parameter passing */
 typedef struct shm_buffer_s {

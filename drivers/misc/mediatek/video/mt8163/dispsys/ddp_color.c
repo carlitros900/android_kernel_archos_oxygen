@@ -1181,7 +1181,7 @@ static unsigned long color_get_TDSHP_VA(void)
 	unsigned long VA;
 	struct device_node *node = NULL;
 
-	node = of_find_compatible_node(NULL, NULL, "mediatek,MDP_TDSHP");
+	node = of_find_compatible_node(NULL, NULL, "mediatek,mt8163-mdp_tdshp0");
 	VA = (unsigned long)of_iomap(node, 0);
 	COLOR_DBG("TDSHP VA: 0x%lx\n", VA);
 

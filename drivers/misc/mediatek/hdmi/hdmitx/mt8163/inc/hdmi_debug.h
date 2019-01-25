@@ -20,7 +20,7 @@ extern void hdmi_force_plug_out(void);
 extern void hdmi_force_plug_in(void);
 extern unsigned char hdmi_hdcp_for_avmute;
 extern void mt_hdmi_show_info(char *pbuf);
-extern void mt_hdmi_debug_write(char *pbuf);
+extern void mt_hdmi_debug_write(const char *pbuf);
 
 #endif
 #endif

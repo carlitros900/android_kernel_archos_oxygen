@@ -4,6 +4,9 @@ obj-$(CONFIG_MTK_PMIC)          += pmic_mt6323.o pmic_chr_type_det.o
 
 obj-$(CONFIG_MTK_SMART_BATTERY) += battery_meter_hal.o
 
+ifeq ($(CONFIG_MTK_BQ27520_SUPPORT),y)
+     obj-$(CONFIG_MTK_SMART_BATTERY) += bq27520.o
+endif
 
 ifeq ($(CONFIG_MTK_BQ24261_SUPPORT),y)
      obj-$(CONFIG_MTK_SMART_BATTERY) += bq24261.o charging_hw_bq24261.o

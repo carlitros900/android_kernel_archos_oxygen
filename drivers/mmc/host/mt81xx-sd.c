@@ -1151,7 +1151,7 @@ static int msdc_card_busy(struct mmc_host *mmc)
 {
 	struct msdc_host *host = mmc_priv(mmc);
 	u32 ret;
-	u32 status;
+        u32 status;
 
 	pm_runtime_get_sync(host->dev);
 	status = readl(host->base + MSDC_PS);

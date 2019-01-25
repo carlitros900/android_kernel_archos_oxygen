@@ -306,6 +306,10 @@ struct musbfsh {
 	unsigned double_buffer_not_ok:1;
 
 	struct musbfsh_hdrc_config *config;
+	/*ENABLE_USB11_ISO_TRANSFER*/
+	uint32_t ep_fifo;
+	uint32_t ep_fifo_total_sz;
+	/*END ENABLE_USB11_ISO_TRANSFER*/
 };
 
 static inline void musbfsh_configure_ep0(struct musbfsh *musbfsh)

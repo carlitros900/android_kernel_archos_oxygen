@@ -7,7 +7,6 @@
 #include <linux/reboot.h>
 #include <mt-plat/mt_reboot.h>
 #include <mt-plat/mtk_rtc.h>
-#include <mach/mtk_rtc_hal.h>
 
 static int wd_cpu_hot_plug_on_notify(int cpu);
 static int wd_cpu_hot_plug_off_notify(int cpu);
@@ -571,30 +570,24 @@ void arch_reset(char mode, const char *cmd)
 	dump_stack();
 	if (cmd && !strcmp(cmd, "charger")) {
 		/* do nothing */
-		rtc_clear_hard_reset();
 	} else if (cmd && !strcmp(cmd, "recovery")) {
-		rtc_clear_hard_reset();
 		rtc_mark_recovery();
 	} else if (cmd && !strcmp(cmd, "bootloader")) {
-		rtc_clear_hard_reset();
 		rtc_mark_fast();
 	} else if (cmd && !strcmp(cmd, "kpoc")) {
 #ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING
-		rtc_clear_hard_reset();
 		rtc_mark_kpoc();
 #endif
+	} else if (cmd && !strcmp(cmd, "rpmbpk")) {
+		mtk_wd_SetNonResetReg2(0,1);
 	} else {
-		rtc_clear_hard_reset();
 		reboot = 1;
 	}
 
 	if (res)
 		pr_err("arch_reset, get wd api error %d\n", res);
-	else {
-		printk(">>>>>>>>>> %s %d res = %d>>>>>>>>>\n", __func__, __LINE__, res);
-	       	rtc_clear_hard_reset();
+	else
 		wd_api->wd_sw_reset(reboot);
-	}
  #endif
 }
 static struct notifier_block mtk_restart_handler;

@@ -33,6 +33,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/dma-contiguous.h>
 #include <linux/efi.h>
+#include <linux/cma.h>
 #include <mt-plat/mtk_meminfo.h>
 
 #include <asm/fixmap.h>
@@ -82,8 +83,15 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 	unsigned long zone_size[MAX_NR_ZONES], zhole_size[MAX_NR_ZONES];
 	unsigned long max_dma = min;
 #ifdef CONFIG_ZONE_MOVABLE_CMA
-	unsigned long cma_base_pfn = get_zone_movable_cma_base() >> PAGE_SHIFT;
+	phys_addr_t cma_base;
+	unsigned long cma_size;
+	unsigned long cma_base_pfn = ULONG_MAX;
+
+	cma_get_range(&cma_base, &cma_size);
+	if (cma_size)
+		cma_base_pfn = PFN_DOWN(cma_base);
 #endif
+
 	memset(zone_size, 0, sizeof(zone_size));
 
 	/* 4GB maximum for 32-bit only capable devices */
@@ -95,8 +103,12 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 		zone_size[ZONE_DMA] = max_dma - min;
 	}
 #ifdef CONFIG_ZONE_MOVABLE_CMA
-	zone_size[ZONE_NORMAL] = cma_base_pfn - max_dma;
-	zone_size[ZONE_MOVABLE] = max - cma_base_pfn;
+	if (cma_size) {
+		zone_size[ZONE_NORMAL] = cma_base_pfn - max_dma;
+		zone_size[ZONE_MOVABLE] = max - cma_base_pfn;
+	} else {
+		zone_size[ZONE_NORMAL] = max - max_dma;
+	}
 #else
 	zone_size[ZONE_NORMAL] = max - max_dma;
 #endif
@@ -116,14 +128,14 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 		}
 
 #ifdef CONFIG_ZONE_MOVABLE_CMA
-		if (end > max_dma && end < cma_base_pfn) {
+		if (cma_size && end > max_dma && end < cma_base_pfn) {
 			unsigned long normal_end = min(end, cma_base_pfn);
 			unsigned long normal_start = max(start, max_dma);
 
 			zhole_size[ZONE_NORMAL] -= normal_end - normal_start;
 		}
 
-		if (end > cma_base_pfn) {
+		if (cma_size && end > cma_base_pfn) {
 			unsigned long movable_end = min(end, max);
 			unsigned long movable_start = max(start, cma_base_pfn);
 
@@ -146,7 +158,11 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 
 int pfn_valid(unsigned long pfn)
 {
-	return (pfn & PFN_MASK) == pfn && memblock_is_memory(pfn << PAGE_SHIFT);
+	phys_addr_t addr = pfn << PAGE_SHIFT;
+
+	if ((addr >> PAGE_SHIFT) != pfn)
+		return 0;
+	return memblock_is_memory(addr);
 }
 EXPORT_SYMBOL(pfn_valid);
 #endif
@@ -185,6 +201,8 @@ void __init arm64_memblock_init(void)
 	/* 4GB maximum for 32-bit only capable devices */
 	if (IS_ENABLED(CONFIG_ZONE_DMA))
 		dma_phys_limit = max_zone_dma_phys();
+
+	high_memory = __va(memblock_end_of_DRAM() - 1) + 1;
 	dma_contiguous_reserve(dma_phys_limit);
 
 	mrdump_rsvmem();
@@ -208,7 +226,6 @@ void __init bootmem_init(void)
 	sparse_init();
 	zone_sizes_init(min, max);
 
-	high_memory = __va((max << PAGE_SHIFT) - 1) + 1;
 	max_pfn = max_low_pfn = max;
 }
 
@@ -317,8 +334,8 @@ void __init mem_init(void)
 		  "      .data : 0x%p" " - 0x%p" "   (%6ld KB)\n",
 		  MLG(VMALLOC_START, VMALLOC_END),
 #ifdef CONFIG_SPARSEMEM_VMEMMAP
-		  MLG((unsigned long)vmemmap,
-		      (unsigned long)vmemmap + VMEMMAP_SIZE),
+		  MLG(VMEMMAP_START,
+		      VMEMMAP_START + VMEMMAP_SIZE),
 		  MLM((unsigned long)virt_to_page(PAGE_OFFSET),
 		      (unsigned long)virt_to_page(high_memory)),
 #endif

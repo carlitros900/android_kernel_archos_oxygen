@@ -278,25 +278,6 @@ static int __match_id(u32 axi_id, int tbl_idx, u32 port_ID)
 	return 0;
 }
 
-
-#ifdef CONFIG_MTK_AEE_FEATURE
-
-static u32 __id2mst(u32 id)
-{
-	int i;
-	u32 axi_ID;
-	u32 port_ID;
-
-	axi_ID = (id >> 3) & 0x000001FFF;
-	port_ID = id & 0x00000007;
-
-	for (i = 0; i < ARRAY_SIZE(mst_tbl); i++) {
-		if (__match_id(axi_ID, i, port_ID))
-			return mst_tbl[i].master;
-	}
-	return MST_INVALID;
-}
-#endif
 static char *__id2name(u32 id)
 {
 	int i;
@@ -440,7 +421,7 @@ static irqreturn_t mpu_violation_irq(int irq, void *dev_id)
 
 #ifdef CONFIG_MTK_AEE_FEATURE
 	/*FIXME: skip ca53 violation to trigger root-cause KE*/
-	if ((0 != dbg_s) && (__id2mst(master_ID) != MST_ID_APMCU_0) && (__id2mst(master_ID) != MST_ID_APMCU_1)) {
+	if ((0 != dbg_s) && ((master_ID & 0x7) != 0)) {
 		/*aee_kernel_exception("EMI MPU", "EMI MPU violation.\nEMP_MPUS = 0x%x,
 		EMI_MPUT = 0x%x, EMI_MPU(PQR).\n", dbg_s, dbg_t+emi_physical_offset, dbg_pqry);*/
 		aee_kernel_exception("EMI MPU", "EMI MPU violation.\nEMI_MPUS = 0x%x, EMI_MPUT = 0x%x, module is %s.\n",

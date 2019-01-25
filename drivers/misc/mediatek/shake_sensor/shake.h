@@ -10,9 +10,9 @@
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <linux/hwmsensor.h>
-#include <linux/earlysuspend.h>
-#include <linux/hwmsen_dev.h>
+#include <hwmsensor.h>
+//#include <linux/earlysuspend.h>
+#include <hwmsen_dev.h>
 
 
 #define SHK_TAG		"<SHAKE> "
@@ -62,7 +62,7 @@ struct shk_init_info {
 };
 
 struct shk_data {
-	hwm_sensor_data shk_data;
+	struct hwm_sensor_data shk_data;
 	int data_updata;
 	/* struct mutex lock; */
 };
@@ -82,7 +82,7 @@ struct shk_context {
 	atomic_t wake;		/*user-space request to wake-up, used with stop */
 	atomic_t trace;
 
-	struct early_suspend early_drv;
+	//struct early_suspend early_drv;
 	atomic_t early_suspend;
 	atomic_t suspend;
 

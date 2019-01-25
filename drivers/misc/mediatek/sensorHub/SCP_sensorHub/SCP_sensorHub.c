@@ -16,28 +16,53 @@
 #include <linux/input.h>
 #include <linux/workqueue.h>
 #include <linux/kobject.h>
-#include <linux/earlysuspend.h>
+//#include <linux/earlysuspend.h>
 #include <linux/platform_device.h>
 #include <linux/dma-mapping.h>
 #include <asm/atomic.h>
 
-#include <mach/mt_typedefs.h>
-#include <mach/mt_gpio.h>
-#include <mach/mt_pm_ldo.h>
+#include "mt_typedefs.h"
+#include <mt-plat/mt_gpio.h>
+#include  "mt_pm_ldo.h"
 
+#ifdef CONFIG_CUSTOM_KERNEL_STEP_COUNTER
 #include "step_counter.h"
-#include "pedometer.h"
-#include "activity.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_IN_POCKET_SENSOR
 #include "in_pocket.h"
-#include "face_down.h"
-#include "pick_up.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_PEDOMETER
+#include "pedometer.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_ACTIVITY_SENSOR
+#include "activity.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_SHAKE_SENSOR
 #include "shake.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_PICK_UP_SENSOR
+#include "pick_up.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_FACE_DOWN_SENSOR
+#include "face_down.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_HEART_RATE_SENSOR
 #include "heart_rate.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_TILT_DETECTOR_SENSOR
 #include "tilt_detector.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_WAKE_GESTURE_SENSOR
 #include "wake_gesture.h"
+#endif
+#ifdef CONFIG_CUSTOM_KERNEL_GLANCE_GESTURE_SENSOR
 #include "glance_gesture.h"
-#include <linux/batch.h>
+#endif
+
+
+#include <batch.h>
 #include <mach/md32_ipi.h>
+#include <mach/md32_helper.h>
 #include <linux/time.h>
 
 #define POWER_NONE_MACRO MT65XX_POWER_NONE
@@ -48,8 +73,8 @@
 #include "SCP_sensorHub.h"
 #include "cust_sensorHub.h"
 #include <hwmsen_helper.h>
-#include <mach/mt_clkmgr.h>
-#include <scp_helper.h>
+#include  "mt_clkmgr.h"
+//#include <scp_helper.h>
 /*----------------------------------------------------------------------------*/
 /* #define DEBUG 1 */
 /* #define SENSORHUB_UT */
@@ -319,7 +344,7 @@ static unsigned long long SCP_sensorHub_GetCurNS(void)
 
 /*----------------------------------------------------------------------------*/
 /* md32 may lock hw semaphore about 6.x ms to push data to dram. */
-static int SCP_sensorHub_get_semaphore(void)
+static int SCP_sensorHub_get_md32_semaphore(void)
 {
 	int64_t start_nt, cur_nt;
 	struct timespec time;
@@ -331,20 +356,20 @@ static int SCP_sensorHub_get_semaphore(void)
 	start_nt = time.tv_sec * 1000000000LL + time.tv_nsec;
 
 	do {
-		err = get_scp_semaphore(SEMAPHORE_SENSOR);
+		err = get_md32_semaphore(SEMAPHORE_SENSOR);
 		if (err < 0) {
 			time.tv_sec = 0;
 			time.tv_nsec = 0;
 			get_monotonic_boottime(&time);
 			cur_nt = time.tv_sec * 1000000000LL + time.tv_nsec;
-			SCP_ERR("get_scp_semaphore fail : %d, %lld, %lld\n", err, start_nt,
+			SCP_ERR("get_md32_semaphore fail : %d, %lld, %lld\n", err, start_nt,
 				cur_nt);
 		} else {
 			return err;
 		}
 	} while ((cur_nt - start_nt) < 20000000);	/* try 10 ms to get hw semaphore */
 
-	SCP_ERR("get_scp_semaphore timeout : %d, %lld, %lld\n", err, start_nt, cur_nt);
+	SCP_ERR("get_md32_semaphore timeout : %d, %lld, %lld\n", err, start_nt, cur_nt);
 	return err;
 }
 
@@ -361,10 +386,10 @@ static int SCP_sensorHub_init_client(void)	/* call by init done workqueue */
 	/* enable_clock(MT_CG_INFRA_APDMA, "sensorHub"); */
 	/* SCP_ERR("obj=%lld\n", obj); */
 
-	obj->mapping =
+	/*obj->mapping =
 	    dma_map_single(&SCP_sensorHub_dev, (void *)obj->SCP_sensorFIFO,
 		obj->SCP_sensorFIFO->FIFOSize, DMA_BIDIRECTIONAL);
-	SCP_ERR("obj->mapping = %p\n", (void *)obj->mapping);
+	SCP_ERR("obj->mapping = %p\n", (void *)obj->mapping);*/
 	dma_sync_single_for_device(&SCP_sensorHub_dev, obj->mapping, obj->SCP_sensorFIFO->FIFOSize,
 				   DMA_TO_DEVICE);
 
@@ -395,7 +420,7 @@ static int SCP_sensorHub_ReadChipInfo(char *buf, int bufsize)
 }
 
 /*----------------------------------------------------------------------------*/
-static int SCP_sensorHub_ReadSensorData(int handle, hwm_sensor_data *sensorData)
+static int SCP_sensorHub_ReadSensorData(int handle, struct hwm_sensor_data *sensorData)
 {
 	struct SCP_sensorHub_data *obj = obj_data;
 	char *pStart, *pEnd, *pNext;
@@ -411,9 +436,9 @@ static int SCP_sensorHub_ReadSensorData(int handle, hwm_sensor_data *sensorData)
 	if (NULL == sensorData)
 		return -1;
 
-	err = SCP_sensorHub_get_semaphore();
+	err = SCP_sensorHub_get_md32_semaphore();
 	if (err < 0) {
-		SCP_ERR("SCP_sensorHub_get_semaphore fail : %d\n", err);
+		SCP_ERR("SCP_sensorHub_get_md32_semaphore fail : %d\n", err);
 		return -2;
 	}
 
@@ -426,7 +451,7 @@ static int SCP_sensorHub_ReadSensorData(int handle, hwm_sensor_data *sensorData)
 
 	if (rp < pStart || pEnd <= rp) {
 		SCP_ERR("FIFO rp invalid : %p, %p, %p\n", pStart, pEnd, rp);
-		err = release_scp_semaphore(SEMAPHORE_SENSOR);
+		err = release_md32_semaphore(SEMAPHORE_SENSOR);
 		if (err < 0) {
 			SCP_ERR("release_md32_semaphore fail : %d\n", err);
 			return -3;
@@ -436,9 +461,9 @@ static int SCP_sensorHub_ReadSensorData(int handle, hwm_sensor_data *sensorData)
 
 	if (wp < pStart || pEnd <= wp) {
 		SCP_ERR("FIFO wp invalid : %p, %p, %p\n", pStart, pEnd, wp);
-		err = release_scp_semaphore(SEMAPHORE_SENSOR);
+		err = release_md32_semaphore(SEMAPHORE_SENSOR);
 		if (err < 0) {
-			SCP_ERR("release_scp_semaphore fail : %d\n", err);
+			SCP_ERR("release_md32_semaphore fail : %d\n", err);
 			return -3;
 		}
 		return -5;
@@ -446,9 +471,9 @@ static int SCP_sensorHub_ReadSensorData(int handle, hwm_sensor_data *sensorData)
 
 	if (rp == wp) {
 		SCP_ERR("FIFO empty\n");
-		err = release_scp_semaphore(SEMAPHORE_SENSOR);
+		err = release_md32_semaphore(SEMAPHORE_SENSOR);
 		if (err < 0) {
-			SCP_ERR("release_scp_semaphore fail : %d\n", err);
+			SCP_ERR("release_md32_semaphore fail : %d\n", err);
 			return -3;
 		}
 		return -6;
@@ -481,9 +506,9 @@ static int SCP_sensorHub_ReadSensorData(int handle, hwm_sensor_data *sensorData)
 		obj->SCP_sensorFIFO->rp = (int)(rp - pStart);
 		dma_sync_single_for_device(&SCP_sensorHub_dev, obj->mapping,
 				obj->SCP_sensorFIFO->FIFOSize, DMA_TO_DEVICE);
-		err = release_scp_semaphore(SEMAPHORE_SENSOR);
+		err = release_md32_semaphore(SEMAPHORE_SENSOR);
 		if (err < 0)	/* allow scp to access dram */
-			SCP_ERR("release_scp_semaphore fail : %d\n", err);
+			SCP_ERR("release_md32_semaphore fail : %d\n", err);
 
 		sensorData->sensor = curData.sensorType;
 		sensorData->value_divide = 1000;	/* need to check */
@@ -740,7 +765,7 @@ static void SCP_sensorHub_late_resume(struct early_suspend *h)
 static unsigned long long t1, t2, t3, t4, t5, t6;
 int SCP_sensorHub_req_send(SCP_SENSOR_HUB_DATA_P data, uint *len, unsigned int wait)
 {
-	ipi_status status;
+	enum ipi_status status;
 	int err = 0;
 
 	if (SCP_TRC_IPI & atomic_read(&(obj_data->trace)))
@@ -998,7 +1023,7 @@ static int SCP_sensorHub_flush(int handle)
 }
 
 /*----------------------------------------------------------------------------*/
-static int SCP_sensorHub_get_data(int handle, hwm_sensor_data *sensorData)
+static int SCP_sensorHub_get_data(int handle, struct hwm_sensor_data *sensorData)
 {
 	if (SCP_TRC_FUN == atomic_read(&(obj_data->trace)))
 		SCP_FUN();
@@ -1021,7 +1046,7 @@ static int SCP_sensorHub_get_fifo_status(int *dataLen, int *status, char *reserv
 
 	if (SCP_TRC_FUN == atomic_read(&(obj_data->trace)))
 		SCP_FUN();
-	for (i = 0; i <= MAX_ANDROID_SENSOR_NUM; i++)
+	for (i = 0; i <= ID_SENSOR_MAX_HANDLE; i++)
 		pt[i].total_count = 0;
 
 	*dataLen = 0;
@@ -1037,17 +1062,17 @@ static int SCP_sensorHub_get_fifo_status(int *dataLen, int *status, char *reserv
 		return -1;
 	}
 		/* To prevent get fifo status during scp wrapper around dram fifo. */
-		err = SCP_sensorHub_get_semaphore();
+		err = SCP_sensorHub_get_md32_semaphore();
 		if (err < 0) {
-			SCP_ERR("SCP_sensorHub_get_semaphore fail : %d\n", err);
+			SCP_ERR("SCP_sensorHub_get_md32_semaphore fail : %d\n", err);
 			return -2;
 		}
 		dma_sync_single_for_cpu(&SCP_sensorHub_dev, obj->mapping,
 					obj->SCP_sensorFIFO->FIFOSize, DMA_FROM_DEVICE);
 		/* No data need to sync. back to device, release semaphore immediately. */
-		err = release_scp_semaphore(SEMAPHORE_SENSOR);
+		err = release_md32_semaphore(SEMAPHORE_SENSOR);
 		if (err < 0) {
-			SCP_ERR("release_scp_semaphore fail : %d\n", err);
+			SCP_ERR("release_md32_semaphore fail : %d\n", err);
 			return -3;
 		}
 
@@ -1148,6 +1173,10 @@ static int SCP_sensorHub_probe(void)
 		 + offsetof(struct sensorFIFO, data)); */
 	obj->SCP_sensorFIFO->FIFOSize =
 	    SCP_SENSOR_HUB_FIFO_SIZE - offsetof(struct sensorFIFO, data);
+        obj->mapping =
+                dma_map_single(&SCP_sensorHub_dev, (void *)obj->SCP_sensorFIFO,
+                obj->SCP_sensorFIFO->FIFOSize, DMA_BIDIRECTIONAL);
+	SCP_ERR("obj->mapping = %p\n", (void *)obj->mapping);
 	obj->hw = get_cust_sensorHub_hw();
 
 	SCP_ERR("obj->SCP_sensorFIFO = %p, wp = %d, rp = %d, size = %d\n", obj->SCP_sensorFIFO,
@@ -1227,7 +1256,7 @@ static int SCP_sensorHub_probe(void)
 
 	ctl.enable_hw_batch = SCP_sensorHub_enable_hw_batch;
 	ctl.flush = SCP_sensorHub_flush;
-	err = batch_register_control_path(MAX_ANDROID_SENSOR_NUM, &ctl);
+	err = batch_register_control_path(ID_SENSOR_MAX_HANDLE, &ctl);
 	if (err) {
 		SCP_ERR("register SCP sensor hub control path err\n");
 		goto exit_kfree;
@@ -1236,7 +1265,7 @@ static int SCP_sensorHub_probe(void)
 	data.get_data = SCP_sensorHub_get_data;
 	data.get_fifo_status = SCP_sensorHub_get_fifo_status;
 	data.is_batch_supported = 1;
-	err = batch_register_data_path(MAX_ANDROID_SENSOR_NUM, &data);
+	err = batch_register_data_path(ID_SENSOR_MAX_HANDLE, &data);
 	if (err) {
 		SCP_ERR("register SCP sensor hub control data path err\n");
 		goto exit_kfree;
@@ -1284,7 +1313,12 @@ static int SCP_sensorHub_remove(void)
 
 	return 0;
 }
-
+#if defined(CONFIG_CUSTOM_KERNEL_IN_POCKET_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_ACTIVITY_SENSOR)|| \
+    defined(CONFIG_CUSTOM_KERNEL_SHAKE_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_PICK_UP_SENSOR) || \
+    defined(CONFIG_CUSTOM_KERNEL_FACE_DOWN_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_TILT_DETECTOR_SENSOR)|| \
+    defined(CONFIG_CUSTOM_KERNEL_WAKE_GESTURE_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_GLANCE_GESTURE_SENSOR)|| \
+    defined(CONFIG_CUSTOM_KERNEL_HEART_RATE_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_PEDOMETER)|| \
+    defined(CONFIG_CUSTOM_KERNEL_STEP_COUNTER)
 /*----------------------------------------------------------------------------*/
 static int SCP_sensor_enable(int sensorType, int en)
 {
@@ -1305,7 +1339,10 @@ static int SCP_sensor_enable(int sensorType, int en)
 
 	return err;
 }
+#endif
 
+#if defined(CONFIG_CUSTOM_KERNEL_ACTIVITY_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_HEART_RATE_SENSOR) || \
+    defined(CONFIG_CUSTOM_KERNEL_PEDOMETER)
 static int SCP_sensor_set_delay(int sensorType, int delay)
 {
 	SCP_SENSOR_HUB_DATA req;
@@ -1325,7 +1362,12 @@ static int SCP_sensor_set_delay(int sensorType, int delay)
 
 	return err;
 }
+#endif
 
+#if defined(CONFIG_CUSTOM_KERNEL_IN_POCKET_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_ACTIVITY_SENSOR)|| \
+    defined(CONFIG_CUSTOM_KERNEL_SHAKE_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_PICK_UP_SENSOR) || \
+    defined(CONFIG_CUSTOM_KERNEL_FACE_DOWN_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_TILT_DETECTOR_SENSOR)|| \
+    defined(CONFIG_CUSTOM_KERNEL_WAKE_GESTURE_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_GLANCE_GESTURE_SENSOR)
 /*----------------------------------------------------------------------------*/
 static int SCP_sensor_get_data16(int sensorType, void *value, int *status)
 {
@@ -1384,7 +1426,10 @@ static int SCP_sensor_get_data16(int sensorType, void *value, int *status)
 	SCP_LOG("sensorType = %d, value = %d\n", sensorType, *((u16 *) value));
 	return err;
 }
+#endif
 
+#if defined(CONFIG_CUSTOM_KERNEL_STEP_COUNTER) || defined(CONFIG_CUSTOM_KERNEL_HEART_RATE_SENSOR) || \
+    defined(CONFIG_CUSTOM_KERNEL_PEDOMETER)
 static int SCP_sensor_get_data32(int sensorType, void *value, int *status)
 {
 	SCP_SENSOR_HUB_DATA req;
@@ -1411,7 +1456,7 @@ static int SCP_sensor_get_data32(int sensorType, void *value, int *status)
 	case ID_SIGNIFICANT_MOTION:
 		*((u32 *) value) = *(req.get_data_rsp.int32_Data);
 		break;
-	case ID_PEDOMETER:	/* there are 4 values in pedometer */
+	case ID_PEDOMETER:	
 		*(u32 *) value = *req.get_data_rsp.int32_Data;
 		*((u32 *) value + 1) = *(req.get_data_rsp.int32_Data + 1);
 		*((u32 *) value + 2) = *(req.get_data_rsp.int32_Data + 2);
@@ -1420,7 +1465,7 @@ static int SCP_sensor_get_data32(int sensorType, void *value, int *status)
 			*((u32 *) value), *((u32 *) value + 1), *((u32 *) value + 2),
 			*((u32 *) value + 3));
 		break;
-	case ID_HEART_RATE:	/* there are 4 values in pedometer */
+	case ID_HEART_RATE:
 		*(u32 *) value = *req.get_data_rsp.int32_Data;
 		*((u32 *) value + 1) = *(req.get_data_rsp.int32_Data + 1);
 		SCP_LOG("ID_HEART_RATE, value=%d value1=%d\n",
@@ -1433,7 +1478,9 @@ static int SCP_sensor_get_data32(int sensorType, void *value, int *status)
 	SCP_LOG("sensorType = %d, value = %d\n", sensorType, *((u32 *) value));
 	return err;
 }
+#endif
 
+/*
 static int SCP_sensor_get_data(int sensorType, void *value, int *status)
 {
 	SCP_SENSOR_HUB_DATA req;
@@ -1460,13 +1507,15 @@ static int SCP_sensor_get_data(int sensorType, void *value, int *status)
 	case ID_SIGNIFICANT_MOTION:
 		*((u64 *) value) = *(req.get_data_rsp.int32_Data);
 		break;
-	case ID_HEART_RATE:	/* there are 2 values in heart rate */
+	case ID_HEART_RATE:	
+	// there are 2 values in heart rate 
 		*(u64 *) value = *req.get_data_rsp.int32_Data;
 		*((u64 *) value + 1) = *(req.get_data_rsp.int32_Data + 1);
 		SCP_LOG("ID_PEDOMETER, value=%lld value1=%lld\n",
 			*((u64 *) value), *((u64 *) value + 1));
 		break;
-	case ID_PEDOMETER:	/* there are 4 values in pedometer */
+	case ID_PEDOMETER:	
+	 //there are 4 values in pedometer 
 		*(u64 *) value = *req.get_data_rsp.int32_Data;
 		*((u64 *) value + 1) = *(req.get_data_rsp.int32_Data + 1);
 		*((u64 *) value + 2) = *(req.get_data_rsp.int32_Data + 2);
@@ -1475,7 +1524,8 @@ static int SCP_sensor_get_data(int sensorType, void *value, int *status)
 			*((u64 *) value), *((u64 *) value + 1), *((u64 *) value + 2),
 			*((u64 *) value + 3));
 		break;
-	case ID_ACTIVITY:	/* there are 6 values in activity */
+	case ID_ACTIVITY:	
+	//there are 6 values in activity 
 		*(u64 *) value = *req.get_data_rsp.int16_Data;
 		*((u64 *) value + 1) = *(req.get_data_rsp.int16_Data + 1);
 		*((u64 *) value + 2) = *(req.get_data_rsp.int16_Data + 2);
@@ -1527,6 +1577,11 @@ static int SCP_sensor_get_data(int sensorType, void *value, int *status)
 
 	return err;
 }
+*/
+#if defined(CONFIG_CUSTOM_KERNEL_IN_POCKET_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_STEP_COUNTER)|| \
+    defined(CONFIG_CUSTOM_KERNEL_SHAKE_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_PICK_UP_SENSOR) || \
+    defined(CONFIG_CUSTOM_KERNEL_FACE_DOWN_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_TILT_DETECTOR_SENSOR)|| \
+    defined(CONFIG_CUSTOM_KERNEL_WAKE_GESTURE_SENSOR) || defined(CONFIG_CUSTOM_KERNEL_GLANCE_GESTURE_SENSOR)
 
 static int SCP_sensorHub_notify_handler(void *data, uint len)
 {
@@ -1585,6 +1640,7 @@ static int SCP_sensorHub_notify_handler(void *data, uint len)
 
 	return 0;
 }
+#endif
 
 /*----------------------------------------------------------------------------*/
 #ifdef CONFIG_CUSTOM_KERNEL_HEART_RATE_SENSOR
@@ -1674,6 +1730,7 @@ static int SCP_sensorHub_heart_rate_uninit(void)
 }
 #endif				/* #ifdef CONFIG_CUSTOM_KERNEL_HEART_RATE_SENSOR */
 #ifdef CONFIG_CUSTOM_KERNEL_PEDOMETER
+
 /* static void SCP_hrm_work(struct work_struct *work) */
 /* { */
 /* if (SCP_TRC_FUN == atomic_read(&(obj_data->trace))) */

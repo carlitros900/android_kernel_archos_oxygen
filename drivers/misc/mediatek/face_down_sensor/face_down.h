@@ -10,9 +10,9 @@
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/module.h>
-#include <linux/hwmsensor.h>
-#include <linux/earlysuspend.h>
-#include <linux/hwmsen_dev.h>
+#include <hwmsensor.h>
+//#include <linux/earlysuspend.h>
+#include <hwmsen_dev.h>
 
 
 #define FDN_TAG		"<FACE_DOWN> "
@@ -28,6 +28,7 @@
 #define FDN_INVALID_VALUE -1
 
 #define EVENT_TYPE_FDN_VALUE		REL_X
+#define EVENT_TYPE_FLIP_VALUE             REL_Y
 
 #define FDN_VALUE_MAX (32767)
 #define FDN_VALUE_MIN (-32768)
@@ -62,7 +63,7 @@ struct fdn_init_info {
 };
 
 struct fdn_data {
-	hwm_sensor_data fdn_data;
+	struct hwm_sensor_data fdn_data;
 	int data_updata;
 	/* struct mutex lock; */
 };
@@ -82,7 +83,7 @@ struct fdn_context {
 	atomic_t wake;		/*user-space request to wake-up, used with stop */
 	atomic_t trace;
 
-	struct early_suspend early_drv;
+	//struct early_suspend early_drv;
 	atomic_t early_suspend;
 	atomic_t suspend;
 

@@ -193,6 +193,10 @@ config MTK_LDVT
 	help
 	  Support LDVT or not
 
+config USB_MTK_CHARGER_DETECT
+	tristate "MediaTek MUSB charger detect"
+	default n
+
 config MTK_LCM_PHYSICAL_ROTATION_HW
 	bool "MTK_LCM_PHYSICAL_ROTATION_HW"
 	default n
@@ -204,30 +208,6 @@ config MTK_LCM_PHYSICAL_ROTATION_HW
 config MTK_SM100
 	bool "Software synchronization 64bits objects"
 	default n
-
-config MTK_IMGSENSOR
-	bool CONFIG_MTK_IMGSENSOR
-	default n
-	help
-	  CONFIG_MTK_IMGSENSOR
-
-config MTK_LCM
-        bool CONFIG_MTK_LCM
-        default n
-        help
-          LCM driver
-
-config CUSTOM_KERNEL_LCM
-        string "CUSTOM_KERNEL_LCM"
-        help
-          To choose kernel LCM driver name
-
-config MTK_LCM_DEVICE_TREE_SUPPORT
-        bool "MTK_LCM_DEVICE_TREE_SUPPORT"
-        help
-          Decide whether to support LCM device tree based configuration.
-          This feature requires the connection between display driver and LCM devices.
-          Please also turn on MTK_LCM_DEVICE_TREE_SUPPORT in ProjectConfig.mk.
 
 source "drivers/misc/mediatek/Kconfig.custom"
 source "drivers/misc/mediatek/gpt/Kconfig"
@@ -267,7 +247,7 @@ source "drivers/misc/mediatek/devapc/Kconfig"
 source "drivers/misc/mediatek/devinfo/Kconfig"
 source "drivers/misc/mediatek/gpu/Kconfig"
 source "drivers/misc/mediatek/mmp/Kconfig"
-#source "drivers/misc/mediatek/lcm/Kconfig"
+source "drivers/misc/mediatek/lcm/Kconfig"
 source "drivers/misc/mediatek/video/Kconfig"
 source "drivers/misc/mediatek/cqdma/Kconfig"
 source "drivers/misc/mediatek/dramc/Kconfig"
@@ -320,7 +300,7 @@ source "drivers/misc/mediatek/sched/Kconfig"
 source "drivers/misc/mediatek/dynamic_boost/Kconfig"
 source "drivers/misc/mediatek/trustzone/Kconfig"
 source "drivers/misc/mediatek/fmradio/Kconfig"
-#source "drivers/misc/mediatek/imgsensor/Kconfig"
+source "drivers/misc/mediatek/imgsensor/Kconfig"
 source "drivers/misc/mediatek/cam_cal/Kconfig"
 source "drivers/misc/mediatek/multibridge/Kconfig"
 source "drivers/misc/mediatek/btif/Kconfig"

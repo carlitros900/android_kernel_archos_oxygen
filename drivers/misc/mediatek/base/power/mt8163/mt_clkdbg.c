@@ -223,20 +223,16 @@ enum ABIST_CLK {
 	ABIST_CLK_END,
 };
 
-/*
 static const char * const ABIST_CLK_NAME[] = {
 };
-*/
 
 enum CKGEN_CLK {
 	CKGEN_CLK_NULL,
 	CKGEN_CLK_END,
 };
 
-/*
 static const char * const CKGEN_CLK_NAME[] = {
 };
-*/
 
 #if DUMP_INIT_STATE
 

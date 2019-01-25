@@ -122,12 +122,7 @@ extern signed_int battery_meter_get_charger_voltage(void);
 extern void send_otg_event(enum usb_otg_event event);
 #endif
 
-#ifndef CONFIG_MTK_CLKMGR
-#include <linux/clk.h>
-extern struct clk *usbpll_clk;
-extern struct clk *usbmcu_clk;
-extern struct clk *usb_clk;
-#endif
+
 
 /* Helper defines for struct musb->hwvers */
 #define MUSB_HWVERS_MAJOR(x)	((x >> 10) & 0x1f)

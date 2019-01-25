@@ -42,4 +42,4 @@ else
 ccflags-y += -UCONFIG_MALI_DEBUG
 endif
 
-
+ccflags-y += -Wno-switch-unreachable

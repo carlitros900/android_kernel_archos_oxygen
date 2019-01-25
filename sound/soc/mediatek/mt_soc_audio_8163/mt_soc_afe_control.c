@@ -166,7 +166,6 @@ static const uint16_t kSideToneCoefficientTable16k[] = {
 	0x7538
 };
 
-/*
 static const uint16_t kSideToneCoefficientTable32k[] = {
 	0xff58, 0x0063, 0x0086, 0x00bf,
 	0x0100, 0x013d, 0x0169, 0x0178,
@@ -177,7 +176,6 @@ static const uint16_t kSideToneCoefficientTable32k[] = {
 	0x08e2, 0x0af7, 0x0cb2, 0x0df0,
 	0x0e96
 };
-*/
 
 /*
  *    function implementation
@@ -223,13 +221,13 @@ unsigned int GetSramState(void)
 
 void SetSramState(unsigned int State)
 {
-	pr_debug("%s state= %d\n", __func__, State);
+	PRINTK_AUDDRV("%s state= %d\n", __func__, State);
 	mAudioSramManager.mMemoryState |= State;
 }
 
 void ClearSramState(unsigned int State)
 {
-	pr_debug("%s state= %d\n", __func__, State);
+	PRINTK_AUDDRV("%s state= %d\n", __func__, State);
 	mAudioSramManager.mMemoryState &= (~State);
 }
 
@@ -1972,12 +1970,12 @@ bool SetMemoryPathEnable(uint32 Aud_block, bool bEnable)
 		mAudioMEMIF[Aud_block]->mUserCount++;
 	} else {
 		mAudioMEMIF[Aud_block]->mUserCount--;
-		if (mAudioMEMIF[Aud_block]->mUserCount == 0)
-			mAudioMEMIF[Aud_block]->mState = false;
 		if (mAudioMEMIF[Aud_block]->mUserCount < 0) {
 			mAudioMEMIF[Aud_block]->mUserCount = 0;
-			pr_warn("warning, user count < 0\n");
+			PRINTK_AUDDRV("warning, user count < 0\n");
 		}
+		if (mAudioMEMIF[Aud_block]->mUserCount == 0)
+			mAudioMEMIF[Aud_block]->mState = false;
 	}
 	PRINTK_AUDDRV("%s Aud_block = %d mAudioMEMIF[Aud_block]->mUserCount = %d\n", __func__,
 		 Aud_block, mAudioMEMIF[Aud_block]->mUserCount);
@@ -2582,8 +2580,7 @@ void SetHdmiTdm1Config(unsigned int channels, unsigned int i2s_wlen)
 	unsigned int register_value = 0;
 
 	register_value |= (MT_AFE_TDM_BCK_INVERSE << 1);
-//	register_value |= (MT_AFE_TDM_LRCK_NOT_INVERSE << 2);
-	register_value |= (MT_AFE_TDM_LRCK_INVERSE << 2);//add by tubao from MTK
+	register_value |= (MT_AFE_TDM_LRCK_INVERSE << 2);
 	register_value |= (MT_AFE_TDM_1_BCK_CYCLE_DELAY << 3);
 	register_value |= (MT_AFE_TDM_ALIGNED_TO_MSB << 4);	/* aligned for I2S mode */
 	register_value |= (MT_AFE_TDM_2CH_FOR_EACH_SDATA << 10);

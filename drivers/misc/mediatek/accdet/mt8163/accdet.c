@@ -45,7 +45,7 @@ static int show_icon_delay;
 static int eint_accdet_sync_flag;
 static int g_accdet_first = 1;
 static bool IRQ_CLR_FLAG;
-static char call_status;
+static int call_status;
 static int button_status;
 struct wake_lock accdet_suspend_lock;
 struct wake_lock accdet_irq_lock;
@@ -68,9 +68,6 @@ static void disable_micbias(unsigned long a);
 #define EINT_PIN_PLUG_OUT       (0)
 int cur_eint_state = EINT_PIN_PLUG_OUT;
 struct pinctrl *accdet_pinctrl1;
-extern struct pinctrl *emdoor_aud;//add by tubao
-extern struct pinctrl_state *emdoor_aud_gpio_high;//add by tubao
-extern struct pinctrl_state *emdoor_aud_gpio_low;//add by tubao
 struct pinctrl_state *pins_eint_int;
 static struct work_struct accdet_disable_work;
 static struct workqueue_struct *accdet_disable_workqueue;
@@ -131,12 +128,10 @@ int accdet_get_cable_type(void)
 void accdet_auxadc_switch(int enable)
 {
 	if (enable) {
-		//pmic_pwrap_write(ACCDET_RSV, ACCDET_1V9_MODE_ON);
-		pmic_pwrap_write(ACCDET_RSV, ACCDET_2V8_MODE_ON);
+		pmic_pwrap_write(ACCDET_RSV, ACCDET_1V9_MODE_ON);
 		ACCDET_DEBUG("ACCDET enable switch\n");
 	} else {
-		//pmic_pwrap_write(ACCDET_RSV, ACCDET_1V9_MODE_OFF);
-		pmic_pwrap_write(ACCDET_RSV, ACCDET_2V8_MODE_OFF);
+		pmic_pwrap_write(ACCDET_RSV, ACCDET_1V9_MODE_OFF);
 		ACCDET_DEBUG("ACCDET disable switch\n");
 	}
 }
@@ -301,10 +296,6 @@ static void accdet_eint_work_callback(struct work_struct *work)
 	/*KE under fastly plug in and plug out*/
 	if (cur_eint_state == EINT_PIN_PLUG_IN) {
 		ACCDET_DEBUG("[Accdet]ACC EINT func :plug-in, cur_eint_state = %d\n", cur_eint_state);
-#if 0// CONFIG_MTK_EXTAMP_PA_CONTROL_GPIO
-		printk("tubao ==>>> come here  %s  cur_eint_state = %d  in  \n",__FUNCTION__,cur_eint_state);
-		pinctrl_select_state(emdoor_aud,emdoor_aud_gpio_low);
-#endif//add by tubao
 		mutex_lock(&accdet_eint_irq_sync_mutex);
 		eint_accdet_sync_flag = 1;
 		mutex_unlock(&accdet_eint_irq_sync_mutex);
@@ -316,11 +307,6 @@ static void accdet_eint_work_callback(struct work_struct *work)
 		ACCDET_DEBUG("[Accdet] FSA8049 enable!\n");
 		msleep(250);	/*PIN swap need ms */
 #endif
-		mutex_lock(&accdet_eint_irq_sync_mutex);
-		cable_type = HEADSET_NO_MIC;
-		accdet_status = HOOK_SWITCH;
-		switch_set_state((struct switch_dev *)&accdet_data, cable_type);
-		mutex_unlock(&accdet_eint_irq_sync_mutex);
 		accdet_init();	/* do set pwm_idle on in accdet_init*/
 
 #ifdef CONFIG_ACCDET_PIN_RECOGNIZATION
@@ -338,10 +324,6 @@ static void accdet_eint_work_callback(struct work_struct *work)
 /*EINT_PIN_PLUG_OUT*/
 /*Disable ACCDET*/
 		ACCDET_DEBUG("[Accdet]EINT func :plug-out, cur_eint_state = %d\n", cur_eint_state);
-#if 0//CONFIG_MTK_EXTAMP_PA_CONTROL_GPIO
-		printk("tubao ==>>> come here  %s  cur_eint_state = %d  out \n",__FUNCTION__,cur_eint_state);
-		pinctrl_select_state(emdoor_aud,emdoor_aud_gpio_high);//add by tubao
-#endif//add by tubao
 		mutex_lock(&accdet_eint_irq_sync_mutex);
 		eint_accdet_sync_flag = 0;
 		mutex_unlock(&accdet_eint_irq_sync_mutex);
@@ -862,6 +844,14 @@ static inline void check_cable_type(void)
 	ACCDET_DEBUG("[Accdet]cable type:[%s], status switch:[%s]->[%s]\n",
 		     accdet_report_string[cable_type], accdet_status_string[pre_status],
 		     accdet_status_string[accdet_status]);
+
+	/*start-xmyyq-20151022-change micbias1 from PWM to DC*/
+	if (NO_DEVICE != cable_type) {
+		ACCDET_DEBUG("[Accdet] change micbias1 from PWM to DC\n");
+		pmic_pwrap_write(ACCDET_PWM_WIDTH, REGISTER_VALUE(cust_headset_settings->pwm_width));
+		pmic_pwrap_write(ACCDET_PWM_THRESH, REGISTER_VALUE(cust_headset_settings->pwm_width));
+	}
+	/*end-xmyyq-20151022-change micbias1 from PWM to DC*/
 }
 
 static void accdet_work_callback(struct work_struct *work)
@@ -1002,8 +992,8 @@ static ssize_t accdet_store_call_state(struct device_driver *ddri, const char *b
 {
 	int ret;
 
-	ret = sscanf(buf, "%s", &call_status);
-	if (ret != 1) {
+	ret = kstrtoint(buf, 0, &call_status);
+	if (ret != 0) {
 		ACCDET_DEBUG("accdet: Invalid values\n");
 		return -EINVAL;
 	}
@@ -1064,12 +1054,12 @@ static int dbug_thread(void *unused)
 static ssize_t store_accdet_start_debug_thread(struct device_driver *ddri, const char *buf, size_t count)
 {
 
-	char start_flag;
+	int start_flag;
 	int error;
 	int ret;
 
-	ret = sscanf(buf, "%s", &start_flag);
-	if (ret != 1) {
+	ret = kstrtoint(buf, 0, &start_flag);
+	if (ret != 0) {
 		ACCDET_DEBUG("accdet: Invalid values\n");
 		return -EINVAL;
 	}
@@ -1092,11 +1082,11 @@ static ssize_t store_accdet_start_debug_thread(struct device_driver *ddri, const
 static ssize_t store_accdet_set_headset_mode(struct device_driver *ddri, const char *buf, size_t count)
 {
 
-	char value;
+	int value;
 	int ret;
 
-	ret = sscanf(buf, "%s", &value);
-	if (ret != 1) {
+	ret = kstrtoint(buf, 0, &value);
+	if (ret != 0) {
 		ACCDET_DEBUG("accdet: Invalid values\n");
 		return -EINVAL;
 	}
@@ -1108,11 +1098,11 @@ static ssize_t store_accdet_set_headset_mode(struct device_driver *ddri, const c
 
 static ssize_t store_accdet_dump_register(struct device_driver *ddri, const char *buf, size_t count)
 {
-	char value;
+	int value;
 	int ret;
 
-	ret = sscanf(buf, "%s", &value);
-	if (ret != 1) {
+	ret = kstrtoint(buf, 0, &value);
+	if (ret != 0) {
 		ACCDET_DEBUG("accdet: Invalid values\n");
 		return -EINVAL;
 	}
@@ -1248,8 +1238,7 @@ int mt_accdet_probe(struct platform_device *dev)
 	if (g_accdet_first == 1) {
 		eint_accdet_sync_flag = 1;
 		/*Accdet Hardware Init*/
-		//pmic_pwrap_write(ACCDET_RSV, ACCDET_1V9_MODE_OFF);
-		pmic_pwrap_write(ACCDET_RSV, ACCDET_2V8_MODE_OFF);
+		pmic_pwrap_write(ACCDET_RSV, ACCDET_1V9_MODE_OFF);
 		accdet_get_dts_data();
 		accdet_init();
 

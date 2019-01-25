@@ -950,6 +950,38 @@ unsigned int set_bat_charging_current_limit(int current_limit)
 	return g_bcct_flag;
 }
 
+#ifdef CONFIG_DYNAMIC_CHARGE_CURRENT_BY_TEMP
+#define TEMP_LEVEL_1				40
+#define CHARGE_CURRENT_LEVEL_1		172800
+#define TEMP_LEVEL_2				41
+#define CHARGE_CURRENT_LEVEL_2		140800
+#define TEMP_LEVEL_3				42
+#define CHARGE_CURRENT_LEVEL_3		115200
+#define TEMP_LEVEL_4				43
+#define CHARGE_CURRENT_LEVEL_4		83200
+#define TEMP_LEVEL_5				44
+#define CHARGE_CURRENT_LEVEL_5		51200
+
+int dynamic_charge_current_by_temp(void)
+{
+	unsigned int ret_current = batt_cust_data.ac_charger_current;
+
+	if(BMT_status.temperature < TEMP_LEVEL_1)
+		ret_current = batt_cust_data.ac_charger_current;
+	else if((BMT_status.temperature >= TEMP_LEVEL_1) && (BMT_status.temperature < TEMP_LEVEL_2))
+		ret_current = CHARGE_CURRENT_LEVEL_1;
+	else if((BMT_status.temperature >= TEMP_LEVEL_2) && (BMT_status.temperature < TEMP_LEVEL_3))
+		ret_current = CHARGE_CURRENT_LEVEL_2;
+	else if((BMT_status.temperature >= TEMP_LEVEL_3) && (BMT_status.temperature < TEMP_LEVEL_4))
+		ret_current = CHARGE_CURRENT_LEVEL_3;
+	else if((BMT_status.temperature >= TEMP_LEVEL_4) && (BMT_status.temperature < TEMP_LEVEL_5))
+		ret_current = CHARGE_CURRENT_LEVEL_4;
+	else if((BMT_status.temperature >= TEMP_LEVEL_5) && (BMT_status.temperature < batt_cust_data.max_charge_temperature))
+		ret_current = CHARGE_CURRENT_LEVEL_5;
+
+	return ret_current;
+}
+#endif
 
 void select_charging_current(void)
 {
@@ -987,27 +1019,44 @@ void select_charging_current(void)
 #else
 			{
 				g_temp_input_CC_value = batt_cust_data.usb_charger_current;
-				g_temp_CC_value = batt_cust_data.usb_charger_current;
+				/*start-160325-xmyyq-add some charger type charger current node*/
+				if(batt_cust_data.usb_charger_charger_current != 0)
+					g_temp_CC_value = batt_cust_data.usb_charger_charger_current;
+				else
+					g_temp_CC_value = batt_cust_data.usb_charger_current;
+				/*end-160325-xmyyq-add some charger type charger current node*/
 			}
 #endif
 		} else if (BMT_status.charger_type == NONSTANDARD_CHARGER) {
 			g_temp_input_CC_value = batt_cust_data.non_std_ac_charger_current;
-			g_temp_CC_value = batt_cust_data.non_std_ac_charger_current;
-
+			/*start-160325-xmyyq-add some charger type charger current node*/
+			if(batt_cust_data.non_std_ac_charger_charger_current != 0)
+				g_temp_CC_value = batt_cust_data.non_std_ac_charger_charger_current;
+			else
+				g_temp_CC_value = batt_cust_data.non_std_ac_charger_current;
+			/*end-160325-xmyyq-add some charger type charger current node*/
 		} else if (BMT_status.charger_type == STANDARD_CHARGER) {
 			if (batt_cust_data.ac_charger_input_current != 0)
 				g_temp_input_CC_value = batt_cust_data.ac_charger_input_current;
 			else
 				g_temp_input_CC_value = batt_cust_data.ac_charger_current;
-
+#ifdef CONFIG_DYNAMIC_CHARGE_CURRENT_BY_TEMP
+			g_temp_CC_value = dynamic_charge_current_by_temp();
+#else
 			g_temp_CC_value = batt_cust_data.ac_charger_current;
+#endif
 #if defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
 			if (is_ta_connect == KAL_TRUE)
 				set_ta_charging_current();
 #endif
 		} else if (BMT_status.charger_type == CHARGING_HOST) {
 			g_temp_input_CC_value = batt_cust_data.charging_host_charger_current;
-			g_temp_CC_value = batt_cust_data.charging_host_charger_current;
+			/*start-160325-xmyyq-add some charger type charger current node*/
+			if(batt_cust_data.charging_host_charger_charger_current != 0)
+				g_temp_CC_value = batt_cust_data.charging_host_charger_charger_current;
+			else
+				g_temp_CC_value = batt_cust_data.charging_host_charger_current;
+			/*end-160325-xmyyq-add some charger type charger current node*/
 		} else if (BMT_status.charger_type == APPLE_2_1A_CHARGER) {
 			g_temp_input_CC_value = batt_cust_data.apple_2_1a_charger_current;
 			g_temp_CC_value = batt_cust_data.apple_2_1a_charger_current;
@@ -1135,7 +1184,7 @@ static void pchr_turn_on_charging(void)
 			/*Set CV Voltage */
 #if !defined(CONFIG_MTK_JEITA_STANDARD_SUPPORT)
 			if (batt_cust_data.high_battery_voltage_support)
-				cv_voltage = BATTERY_VOLT_04_340000_V;
+				cv_voltage = BATTERY_VOLT_04_350000_V;/*start-160325-xmyyq-modify cv to higi battery*/
 			else
 				cv_voltage = BATTERY_VOLT_04_200000_V;
 
@@ -1202,6 +1251,13 @@ PMU_STATUS BAT_ConstantCurrentModeAction(void)
 
 	/*  Enable charger */
 	pchr_turn_on_charging();
+
+#ifdef CONFIG_BATTERY_CHARGER_CE
+	if(BMT_status.UI_SOC == 100) {
+		unsigned int charging_enable = KAL_FALSE;
+		battery_charging_control(CHARGING_CMD_ENABLE,&charging_enable);
+	}
+#endif
 
 	if (charging_full_check() == KAL_TRUE) {
 		BMT_status.bat_charging_state = CHR_BATFULL;
@@ -1327,5 +1383,7 @@ void mt_battery_charging_algorithm(void)
 		break;
 	}
 
-	battery_charging_control(CHARGING_CMD_DUMP_REGISTER, NULL);
+/*start-160325-xmyyq-sync android5.0 modification*/
+   battery_charging_control(CHARGING_CMD_DUMP_REGISTER, NULL);
+/*end-160325-xmyyq-sync android5.0 modification*/
 }

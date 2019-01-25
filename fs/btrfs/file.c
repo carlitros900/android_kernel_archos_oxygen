@@ -760,8 +760,16 @@ next_slot:
 		}
 
 		btrfs_item_key_to_cpu(leaf, &key, path->slots[0]);
-		if (key.objectid > ino ||
-		    key.type > BTRFS_EXTENT_DATA_KEY || key.offset >= end)
+
+		if (key.objectid > ino)
+			break;
+		if (WARN_ON_ONCE(key.objectid < ino) ||
+		    key.type < BTRFS_EXTENT_DATA_KEY) {
+			ASSERT(del_nr == 0);
+			path->slots[0]++;
+			goto next_slot;
+		}
+		if (key.type > BTRFS_EXTENT_DATA_KEY || key.offset >= end)
 			break;
 
 		fi = btrfs_item_ptr(leaf, path->slots[0],
@@ -780,8 +788,8 @@ next_slot:
 				btrfs_file_extent_inline_len(leaf,
 						     path->slots[0], fi);
 		} else {
-			WARN_ON(1);
-			extent_end = search_start;
+			/* can't happen */
+			BUG();
 		}
 
 		/*
@@ -1871,6 +1879,7 @@ int btrfs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 	struct btrfs_log_ctx ctx;
 	int ret = 0;
 	bool full_sync = 0;
+	const u64 len = end - start + 1;
 
 	trace_btrfs_sync_file(file, datasync);
 
@@ -1899,7 +1908,7 @@ int btrfs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 		 * all extents are persisted and the respective file extent
 		 * items are in the fs/subvol btree.
 		 */
-		ret = btrfs_wait_ordered_range(inode, start, end - start + 1);
+		ret = btrfs_wait_ordered_range(inode, start, len);
 	} else {
 		/*
 		 * Start any new ordered operations before starting to log the
@@ -1971,8 +1980,10 @@ int btrfs_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 	 */
 	smp_mb();
 	if (btrfs_inode_in_log(inode, root->fs_info->generation) ||
-	    (full_sync && BTRFS_I(inode)->last_trans <=
-	     root->fs_info->last_trans_committed)) {
+	    (BTRFS_I(inode)->last_trans <=
+	     root->fs_info->last_trans_committed &&
+	     (full_sync ||
+	      !btrfs_have_ordered_extents_in_range(inode, start, len)))) {
 		/*
 		 * We'v had everything committed since the last time we were
 		 * modified so clear this flag in case it was set for whatever
@@ -2789,7 +2800,7 @@ const struct file_operations btrfs_file_operations = {
 	.fallocate	= btrfs_fallocate,
 	.unlocked_ioctl	= btrfs_ioctl,
 #ifdef CONFIG_COMPAT
-	.compat_ioctl	= btrfs_ioctl,
+	.compat_ioctl	= btrfs_compat_ioctl,
 #endif
 };
 

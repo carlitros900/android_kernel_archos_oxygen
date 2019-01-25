@@ -28,8 +28,8 @@
 #define DAL_FG_COLOR        (dal_fg_color)
 
 #define RGB888_To_RGB565(x) ((((x) & 0xF80000) >> 8) |                      \
-				 (((x) & 0x00FC00) >> 5) |                      \
-				 (((x) & 0x0000F8) >> 3))
+			     (((x) & 0x00FC00) >> 5) |                      \
+			     (((x) & 0x0000F8) >> 3))
 
 #define MAKE_TWO_RGB565_COLOR(high, low)  (((low) << 16) | (high))
 
@@ -157,7 +157,7 @@ DAL_STATUS DAL_Init(unsigned long layerVA, unsigned long layerPA)
 
 unsigned long get_Assert_Layer_PA(void)
 {
-	 return dal_fb_pa;
+     return dal_fb_pa;
 }
 
 DAL_STATUS DAL_SetColor(unsigned int fgColor, unsigned int bgColor)
@@ -190,8 +190,8 @@ DAL_STATUS DAL_Dynamic_Change_FB_Layer(unsigned int isAEEEnabled)
 	if (isAEEEnabled == 1) {
 		/* change ui layer from DISP_DEFAULT_UI_LAYER_ID to DISP_CHANGED_UI_LAYER_ID */
 		memcpy((void *)(&cached_layer_config[DISP_CHANGED_UI_LAYER_ID]),
-			   (void *)(&cached_layer_config[DISP_DEFAULT_UI_LAYER_ID]),
-			   sizeof(OVL_CONFIG_STRUCT));
+		       (void *)(&cached_layer_config[DISP_DEFAULT_UI_LAYER_ID]),
+		       sizeof(OVL_CONFIG_STRUCT));
 		ui_layer_tdshp = cached_layer_config[DISP_DEFAULT_UI_LAYER_ID].isTdshp;
 		cached_layer_config[DISP_DEFAULT_UI_LAYER_ID].isTdshp = 0;
 		disp_path_change_tdshp_status(DISP_DEFAULT_UI_LAYER_ID, 0);
@@ -199,12 +199,12 @@ DAL_STATUS DAL_Dynamic_Change_FB_Layer(unsigned int isAEEEnabled)
 		FB_LAYER = DISP_CHANGED_UI_LAYER_ID;
 	} else {
 		memcpy((void *)(&cached_layer_config[DISP_DEFAULT_UI_LAYER_ID]),
-			   (void *)(&cached_layer_config[DISP_CHANGED_UI_LAYER_ID]),
-			   sizeof(OVL_CONFIG_STRUCT));
+		       (void *)(&cached_layer_config[DISP_CHANGED_UI_LAYER_ID]),
+		       sizeof(OVL_CONFIG_STRUCT));
 		cached_layer_config[DISP_DEFAULT_UI_LAYER_ID].isTdshp = ui_layer_tdshp;
 		FB_LAYER = DISP_DEFAULT_UI_LAYER_ID;
 		memset((void *)(&cached_layer_config[DISP_CHANGED_UI_LAYER_ID]), 0,
-			   sizeof(OVL_CONFIG_STRUCT));
+		       sizeof(OVL_CONFIG_STRUCT));
 	}
 
 	/* no matter memcpy or memset, layer ID should not be changed */
@@ -239,13 +239,13 @@ DAL_STATUS DAL_Clean(void)
 	DAL_SetScreenColor(DAL_COLOR_RED);
 
 /*
-	if (LCD_STATE_POWER_OFF == LCD_GetState()) {
-		pr_info("DISP/DAL " "dal_clean in power off\n");
+    if (LCD_STATE_POWER_OFF == LCD_GetState()) {
+	    pr_info("DISP/DAL " "dal_clean in power off\n");
 	dal_disable_when_resume = true;
 	ret = DAL_STATUS_LCD_IN_SUSPEND;
 	goto End;
-	}
-	*/
+    }
+    */
 
 	/* xuecheng, for debug */
 #if 0
@@ -338,7 +338,7 @@ DAL_STATUS DAL_Printf(const char *fmt, ...)
 	DAL_LOCK();
 	if (isAEEEnabled == 0 && !primary_display_is_sleepd()) {
 		pr_debug("[DDP] isAEEEnabled from 0 to 1, ASSERT_LAYER=%d, dal_fb_pa %lx\n",
-			   primary_display_get_option("ASSERT_LAYER"), dal_fb_pa);
+		       primary_display_get_option("ASSERT_LAYER"), dal_fb_pa);
 
 		isAEEEnabled = 1;
 		DAL_Dynamic_Change_FB_Layer(isAEEEnabled);	/* default_ui_ layer coniig to changed_ui_layer */

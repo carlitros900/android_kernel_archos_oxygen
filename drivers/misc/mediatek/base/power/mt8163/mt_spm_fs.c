@@ -135,6 +135,8 @@ static ssize_t show_pwr_ctrl(const struct pwr_ctrl *pwrctrl, char *buf)
 	p += sprintf(p, "param2 = 0x%x\n", pwrctrl->param2);
 	p += sprintf(p, "param3 = 0x%x\n", pwrctrl->param3);
 
+	p += sprintf(p, "enable_log = 0x%x\n", pwrctrl->enable_log);
+
 	BUG_ON(p - buf >= PAGE_SIZE);
 	return p - buf;
 }
@@ -260,6 +262,9 @@ static ssize_t store_pwr_ctrl(struct pwr_ctrl *pwrctrl, const char *buf, size_t 
 		pwrctrl->param2 = val;
 	else if (!strcmp(cmd, "param3"))
 		pwrctrl->param3 = val;
+
+	else if (!strcmp(cmd, "enable_log"))
+		pwrctrl->enable_log = val;
 	else
 		return -EINVAL;
 

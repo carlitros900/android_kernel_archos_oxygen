@@ -4,7 +4,6 @@
 /******************************************************************************
  *  LED & Backlight type defination
  *****************************************************************************/
-#define ERROR_BL_LEVEL 0xFFFFFFFF
 
 enum mt65xx_led_type {
 	MT65XX_LED_TYPE_RED = 0,
@@ -54,8 +53,7 @@ enum mt65xx_led_pmic {
 	MT65XX_LED_PMIC_NLED_ISINK0,
 	MT65XX_LED_PMIC_NLED_ISINK1,
 	MT65XX_LED_PMIC_NLED_ISINK2,
-	MT65XX_LED_PMIC_NLED_ISINK01,
-	MT65XX_LED_PMIC_NLED_ISINK3,
+	MT65XX_LED_PMIC_NLED_ISINK01
 };
 
 enum MT65XX_PMIC_ISINK_MODE {

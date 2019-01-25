@@ -1049,6 +1049,7 @@ extern void hdmi_hdmistatus(void);
 extern void vTxSignalOnOff(unsigned char bOn);
 extern unsigned char bCheckPordHotPlug(unsigned char bMode);
 extern void vHotPlugPinInit(struct platform_device *pdev);
+extern void vDdcPinInit(struct platform_device *pdev);
 extern void vBlackHDMIOnly(void);
 extern void vUnBlackHDMIOnly(void);
 extern void UnMuteHDMIAudio(void);
