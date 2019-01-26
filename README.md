@@ -45,10 +45,15 @@ Finally, build the kernel according the next table of product names:
 | Archos 101b Oxygen        | ac101box                |
 
 
-        $ make -C kernel  O=../KERNEL_OUT  ARCH=arm64 CROSS_COMPILE=../aarch64-linux-android-4.9/bin/aarch64-linux-android- {product}_defconfig
-        $ make O=../KERNEL_OUT/ -C kernel ARCH=arm64  CROSS_COMPILE=../aarch64-linux-android-4.9/bin/aarch64-linux-android-                      
+        $ make -C kernel O=../KERNEL_OUT/ ARCH=arm64 CROSS_COMPILE=../aarch64-linux-android-4.9/bin/aarch64-linux-android- {product}_defconfig
+        $ make -C kernel O=../KERNEL_OUT/ ARCH=arm64 CROSS_COMPILE=../aarch64-linux-android-4.9/bin/aarch64-linux-android-                      
     
 You can specify "-j CORES" argument to speed-up your compilation, example:
 
-        $ make O=../KERNEL_OUT/ -C kernel ARCH=arm64  CROSS_COMPILE=../aarch64-linux-android-4.9/bin/aarch64-linux-android- -j 8
+        $ make -C kernel O=../KERNEL_OUT/ ARCH=arm64 CROSS_COMPILE=../aarch64-linux-android-4.9/bin/aarch64-linux-android- -j 8
 
+Some source code is unavailable, or fails, you have to link the prebuild binary shipped in the /prebuild folder. 
+
+        $ mkdir -p KERNEL_OUT/drivers/power/mediatek
+        $ cp kernel/prebuild/user/drivers/power/mediatek/battery_common.o KERNEL_OUT/drivers/power/mediatek/
+        $ cp kernel/prebuild/user/drivers/power/mediatek/battery_meter.o KERNEL_OUT/drivers/power/mediatek/
