@@ -1320,7 +1320,29 @@ void write_data_page(struct dnode_of_data *dn, struct f2fs_io_info *fio)
 void rewrite_data_page(struct f2fs_io_info *fio)
 {
 	stat_inc_inplace_blocks(fio->sbi);
-	f2fs_submit_page_mbio(fio);
+
+	if (fio->bio)
+		err = f2fs_merge_page_bio(fio);
+	else
+		err = f2fs_submit_page_bio(fio);
+	if (!err) {
+		update_device_state(fio);
+		f2fs_update_iostat(fio->sbi, fio->io_type, F2FS_BLKSIZE);
+	}
+
+	return err;
+}
+
+static inline int __f2fs_get_curseg(struct f2fs_sb_info *sbi,
+						unsigned int segno)
+{
+	int i;
+
+	for (i = CURSEG_HOT_DATA; i < NO_CHECK_TYPE; i++) {
+		if (CURSEG_I(sbi, i)->segno == segno)
+			break;
+	}
+	return i;
 }
 
 static void __f2fs_replace_block(struct f2fs_sb_info *sbi,
