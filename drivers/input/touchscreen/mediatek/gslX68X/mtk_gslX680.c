@@ -1671,7 +1671,7 @@ static const struct of_device_id tpd_of_match[] = {
 	{},
 };
 
-//MODULE_DEVICE_TABLE(of, tpd_of_match);
+MODULE_DEVICE_TABLE(of, tpd_of_match);
 
 struct i2c_driver tpd_i2c_driver = {
 	.driver = {
