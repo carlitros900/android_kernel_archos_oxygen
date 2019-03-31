@@ -538,8 +538,8 @@ static void __batt_meter_parse_table(const struct device_node *np,
 	while (!of_property_read_u32_index(np, node_srting, idx, &addr)) {
 		idx++;
 		if (!of_property_read_u32_index(np, node_srting, idx, &val)) {
-			battery_log(BAT_LOG_CRTI, "batt_temperature_table: addr: %d, val: %d\n",
-				    addr, val);
+			//battery_log(BAT_LOG_CRTI, "batt_temperature_table: addr: %d, val: %d\n",
+			//	    addr, val);
 		}
 		profile_p->percentage = addr;
 		profile_p->voltage = val;
@@ -608,8 +608,8 @@ int __batt_meter_init_cust_data_from_dt(void)
 	while (!of_property_read_u32_index(np, "batt_temperature_table", idx, &addr)) {
 		idx++;
 		if (!of_property_read_u32_index(np, "batt_temperature_table", idx, &val)) {
-			battery_log(BAT_LOG_CRTI, "batt_temperature_table: addr: %d, val: %d\n",
-				    addr, val);
+			//battery_log(BAT_LOG_CRTI, "batt_temperature_table: addr: %d, val: %d\n",
+			//	    addr, val);
 		}
 		Batt_Temperature_Table[idx / 2].BatteryTemp = addr;
 		Batt_Temperature_Table[idx / 2].TemperatureR = val;
