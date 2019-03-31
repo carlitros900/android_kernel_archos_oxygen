@@ -278,7 +278,7 @@ config STOP_CHARGING_IN_TAKLING
 	  This is to provide better user experience
 	  and safety option.
 
-config CONFIG_DIS_CHECK_BATTERY
+config DIS_CHECK_BATTERY
 	bool "No shutdown if battery is not detected"
 	default n
 	help
