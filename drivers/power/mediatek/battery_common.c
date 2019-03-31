@@ -3744,7 +3744,7 @@ static const struct file_operations adc_cali_fops = {
 void check_battery_exist(void)
 {
 #if defined(CONFIG_DIS_CHECK_BATTERY)
-	battery_log(BAT_LOG_CRTI, "[BATTERY] Disable check battery exist.\n");
+	//battery_log(BAT_LOG_CRTI, "[BATTERY] Disable check battery exist.\n");
 #else
 	unsigned int baton_count = 0;
 	unsigned int charging_enable = KAL_FALSE;
