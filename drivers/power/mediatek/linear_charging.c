@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 /*****************************************************************************
  *
  * Filename:
@@ -640,10 +653,8 @@ static BATTERY_VOLTAGE_ENUM select_jeita_cv(void)
 
 PMU_STATUS do_jeita_state_machine(void)
 {
-	int previous_g_temp_status;
 	BATTERY_VOLTAGE_ENUM cv_voltage;
 
-	previous_g_temp_status = g_temp_status;
 	/* JEITA battery temp Standard */
 	if (BMT_status.temperature >= TEMP_POS_60_THRESHOLD) {
 		battery_log(BAT_LOG_CRTI,
@@ -736,15 +747,12 @@ PMU_STATUS do_jeita_state_machine(void)
 		return PMU_STATUS_FAIL;
 	}
 
-	/* set CV after temperature changed */
-	if (g_temp_status != previous_g_temp_status) {
-		cv_voltage = select_jeita_cv();
-		battery_charging_control(CHARGING_CMD_SET_CV_VOLTAGE, &cv_voltage);
+	cv_voltage = select_jeita_cv();
+	battery_charging_control(CHARGING_CMD_SET_CV_VOLTAGE, &cv_voltage);
 
-		#if defined(CONFIG_MTK_HAFG_20)
-		g_cv_voltage = cv_voltage;
-		#endif
-	}
+#if defined(CONFIG_MTK_HAFG_20)
+	g_cv_voltage = cv_voltage;
+#endif
 
 	return PMU_STATUS_OK;
 }
@@ -781,7 +789,42 @@ void set_usb_current_unlimited(bool enable)
 
 void select_charging_curret_bcct(void)
 {
-	/* done on set_bat_charging_current_limit */
+	CHR_CURRENT_ENUM chr_type_ichg = 0;
+
+	switch (BMT_status.charger_type) {
+	case STANDARD_HOST:
+		chr_type_ichg = batt_cust_data.usb_charger_current;
+		break;
+	case NONSTANDARD_CHARGER:
+		chr_type_ichg = batt_cust_data.non_std_ac_charger_current;
+		break;
+	case STANDARD_CHARGER:
+		chr_type_ichg = batt_cust_data.ac_charger_current;
+#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT)
+		if (is_ta_connect == KAL_TRUE && ta_vchr_tuning == KAL_TRUE)
+			chr_type_ichg = CHARGE_CURRENT_1500_00_MA;
+#endif
+		break;
+	case CHARGING_HOST:
+		chr_type_ichg = batt_cust_data.charging_host_charger_current;
+		break;
+	case APPLE_2_1A_CHARGER:
+		chr_type_ichg = batt_cust_data.apple_2_1a_charger_current;
+		break;
+	case APPLE_1_0A_CHARGER:
+		chr_type_ichg = batt_cust_data.apple_1_0a_charger_current;
+		break;
+	case APPLE_0_5A_CHARGER:
+		chr_type_ichg = batt_cust_data.apple_0_5a_charger_current;
+		break;
+	default:
+		chr_type_ichg = CHARGE_CURRENT_500_00_MA;
+		break;
+	}
+
+	if (g_temp_CC_value > chr_type_ichg)
+		g_temp_CC_value = chr_type_ichg;
+
 }
 
 
@@ -847,7 +890,7 @@ unsigned int set_bat_charging_current_limit(int current_limit)
 		g_bcct_flag = 0;
 	}
 
-	wake_up_bat();
+	wake_up_bat3();
 
 	return g_bcct_flag;
 }
@@ -1104,14 +1147,27 @@ static void pchr_turn_on_charging(void)
 			}
 		}
 
+		/* Set Charging Current
+		if (g_bcct_flag == 1) {
+			battery_log(BAT_LOG_FULL,
+					"[BATTERY] select_charging_curret_bcct !\n");
+			select_charging_curret_bcct();
+		} else {
+			if (get_usb_current_unlimited()) {
+				g_temp_CC_value = batt_cust_data.ac_charger_current;
+				battery_log(BAT_LOG_FULL,
+						"USB_CURRENT_UNLIMITED, use AC_CHARGER_CURRENT\n");
+			} else {
+				battery_log(BAT_LOG_FULL, "[BATTERY] select_charging_current !\n");
+				select_charging_curret();
+			}
+		} */
+
 		if (g_temp_CC_value == CHARGE_CURRENT_0_00_MA) {
 			charging_enable = KAL_FALSE;
 			battery_log(BAT_LOG_CRTI,
 				    "[BATTERY] charging current is set 0mA, turn off charging !\r\n");
 		} else {
-#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT)
-if (ta_check_ta_control == KAL_FALSE)
-#endif
 			{
 				if (ulc_cv_charging_current_flag == KAL_TRUE)
 					battery_charging_control(CHARGING_CMD_SET_CURRENT,
@@ -1381,4 +1437,5 @@ void mt_battery_charging_algorithm(void)
 		break;
 	}
 
+	battery_charging_control(CHARGING_CMD_DUMP_REGISTER, NULL);
 }

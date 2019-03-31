@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 /*****************************************************************************
  *
  * Filename:
@@ -75,6 +88,25 @@
 #include <mach/mt_battery_meter.h>
 #include <mach/mt_charging.h>
 #include <mach/mt_pmic.h>
+
+#include "mtk_pep_intf.h"
+#include "mtk_pep20_intf.h"
+
+#ifdef CONFIG_TCPC_CLASS
+#include "tcpm.h"
+#endif
+
+#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT) || defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
+#ifndef PUMP_EXPRESS_SERIES
+#define PUMP_EXPRESS_SERIES
+#endif
+#endif
+
+#if defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_20_SUPPORT)
+#ifndef PUMP_EXPRESS_SERIES
+#define PUMP_EXPRESS_SERIES
+#endif
+#endif
 
 
 
@@ -154,6 +186,8 @@ signed int batterypseudo100 = BATTERYPSEUDO100;
 int Is_In_IPOH;
 struct battery_custom_data batt_cust_data;
 int pending_wake_up_bat;
+
+int cable_in_uevent = 0;
 /* ////////////////////////////////////////////////////////////////////////////// */
 /* Integrate with NVRAM */
 /* ////////////////////////////////////////////////////////////////////////////// */
@@ -213,12 +247,18 @@ static struct hrtimer battery_kthread_timer;
 kal_bool g_battery_soc_ready = KAL_FALSE;
 unsigned char fg_ipoh_reset;
 
+static struct workqueue_struct *battery_init_workqueue;
+static struct work_struct battery_init_work;
+
+#ifdef CONFIG_TCPC_CLASS
+static struct tcpc_device *tcpc_dev;
+#endif
 
 /* ////////////////////////////////////////////////////////////////////////////// */
 /* FOR ADB CMD */
 /* ////////////////////////////////////////////////////////////////////////////// */
 /* Dual battery */
-int g_status_smb = POWER_SUPPLY_STATUS_NOT_CHARGING;
+int g_status_smb = POWER_SUPPLY_STATUS_DISCHARGING;
 int g_capacity_smb = 50;
 int g_present_smb = 0;
 /* ADB charging CMD */
@@ -263,6 +303,7 @@ struct battery_data {
 	int BAT_BatterySenseVoltage;
 	int BAT_ISenseVoltage;
 	int BAT_ChargerVoltage;
+	int BAT_CURRENT_NOW;
 	/* Dual battery */
 	int status_smb;
 	int capacity_smb;
@@ -280,6 +321,9 @@ static enum power_supply_property ac_props[] = {
 
 static enum power_supply_property usb_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
+	POWER_SUPPLY_PROP_CURRENT_MAX,
+	POWER_SUPPLY_PROP_VOLTAGE_MAX,
+	POWER_SUPPLY_PROP_CHARGE_COUNTER
 };
 
 static enum power_supply_property battery_props[] = {
@@ -288,6 +332,10 @@ static enum power_supply_property battery_props[] = {
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_CAPACITY,
+	POWER_SUPPLY_PROP_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CURRENT_MAX,
+	POWER_SUPPLY_PROP_VOLTAGE_MAX,
+	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	/* Add for Battery Service */
 	POWER_SUPPLY_PROP_batt_vol,
 	POWER_SUPPLY_PROP_batt_temp,
@@ -319,7 +367,7 @@ void mt_battery_update_time(struct timespec *pre_time, BATTERY_TIME_ENUM duratio
 
 	battery_duration_time[duration_type] = timespec_sub(time, *pre_time);
 
-	battery_log(BAT_LOG_CRTI,
+	battery_log(BAT_LOG_FULL,
 		    "[Battery] mt_battery_update_duration_time , last_time=%d current_time=%d duration=%d\n",
 		    (int)pre_time->tv_sec, (int)time.tv_sec,
 		    (int)battery_duration_time[duration_type].tv_sec);
@@ -364,6 +412,9 @@ int get_charger_detect_status(void)
 {
 	kal_bool chr_status;
 
+	if (battery_charging_control == NULL)
+		return KAL_FALSE;
+
 	battery_charging_control(CHARGING_CMD_GET_CHARGER_DET_STATUS, &chr_status);
 	return chr_status;
 }
@@ -381,6 +432,11 @@ kal_bool bat_is_ext_power(void)
 /* ///////////////////////////////////////////////////////////////////////////////////////// */
 /* // PMIC PCHR Related APIs */
 /* ///////////////////////////////////////////////////////////////////////////////////////// */
+int __attribute__((weak)) mtk_chr_reset_aicr_upper_bound(void)
+{
+	return 0;
+}
+
 kal_bool upmu_is_chr_det(void)
 {
 #if !defined(CONFIG_POWER_EXT)
@@ -428,6 +484,11 @@ kal_bool upmu_is_chr_det(void)
 }
 EXPORT_SYMBOL(upmu_is_chr_det);
 
+void __attribute__ ((weak))
+	battery_disable_batfet(void)
+{
+	pr_notice("battery_disable_batfet do not implement");
+}
 
 void wake_up_bat(void)
 {
@@ -558,6 +619,16 @@ static int usb_get_property(struct power_supply *psy,
 		val->intval = data->USB_ONLINE;
 #endif
 		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+		val->intval = 5000000;
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		val->intval = 500000;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
+		val->intval = battery_meter_get_QMAX25() * 1000;
+		/* QMAX from battery, ma to ua */
+		break;
 	default:
 		ret = -EINVAL;
 		break;
@@ -588,7 +659,7 @@ static int battery_get_property(struct power_supply *psy,
 		val->intval = data->BAT_CAPACITY;
 		break;
 	case POWER_SUPPLY_PROP_batt_vol:
-		val->intval = data->BAT_batt_vol;
+		val->intval = data->BAT_batt_vol * 1000;
 		break;
 	case POWER_SUPPLY_PROP_batt_temp:
 		val->intval = data->BAT_batt_temp;
@@ -614,6 +685,20 @@ static int battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_ChargerVoltage:
 		val->intval = data->BAT_ChargerVoltage;
 		break;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		val->intval = data->BAT_CURRENT_NOW; /* charge_current */
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_MAX:
+		val->intval = 3000000;
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+		val->intval = 5000000;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
+		val->intval = battery_meter_get_QMAX25() * 1000;
+		/* QMAX from battery, ma to ua */
+		break;
+
 		/* Dual battery */
 	case POWER_SUPPLY_PROP_status_smb:
 		val->intval = data->status_smb;
@@ -691,17 +776,17 @@ static struct battery_data battery_main = {
 	.BAT_batt_vol = 4200,
 	.BAT_batt_temp = 22,
 	/* Dual battery */
-	.status_smb = POWER_SUPPLY_STATUS_NOT_CHARGING,
+	.status_smb = POWER_SUPPLY_STATUS_DISCHARGING,
 	.capacity_smb = 50,
 	.present_smb = 0,
 	/* ADB CMD discharging */
 	.adjust_power = -1,
 #else
-	.BAT_STATUS = POWER_SUPPLY_STATUS_NOT_CHARGING,
+	.BAT_STATUS = POWER_SUPPLY_STATUS_DISCHARGING,
 	.BAT_HEALTH = POWER_SUPPLY_HEALTH_GOOD,
 	.BAT_PRESENT = 1,
 	.BAT_TECHNOLOGY = POWER_SUPPLY_TECHNOLOGY_LION,
-#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT) || defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
+#if defined(PUMP_EXPRESS_SERIES)
 	.BAT_CAPACITY = -1,
 #else
 	.BAT_CAPACITY = 50,
@@ -709,7 +794,7 @@ static struct battery_data battery_main = {
 	.BAT_batt_vol = 0,
 	.BAT_batt_temp = 0,
 	/* Dual battery */
-	.status_smb = POWER_SUPPLY_STATUS_NOT_CHARGING,
+	.status_smb = POWER_SUPPLY_STATUS_DISCHARGING,
 	.capacity_smb = 50,
 	.present_smb = 0,
 	/* ADB CMD discharging */
@@ -717,6 +802,11 @@ static struct battery_data battery_main = {
 #endif
 };
 
+void mt_battery_set_init_vol(int init_voltage)
+{
+	BMT_status.bat_vol = init_voltage;
+	battery_main.BAT_batt_vol = init_voltage;
+}
 
 #if !defined(CONFIG_POWER_EXT)
 /* ///////////////////////////////////////////////////////////////////////////////////////// */
@@ -1553,60 +1643,54 @@ static ssize_t store_Charger_Type(struct device *dev, struct device_attribute *a
 
 static DEVICE_ATTR(Charger_Type, 0664, show_Charger_Type, store_Charger_Type);
 
-#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT) || defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
+
+
+
+
 static ssize_t show_Pump_Express(struct device *dev, struct device_attribute *attr, char *buf)
 {
-#if defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
-	int icount = 20;	/* max debouncing time 20 * 0.2 sec */
+	int is_ta_detected = 0;
 
-	if (KAL_TRUE == ta_check_chr_type &&
-		STANDARD_CHARGER == BMT_status.charger_type &&
-		BMT_status.UI_SOC2 >= batt_cust_data.ta_start_battery_soc &&
-		BMT_status.UI_SOC2 < batt_cust_data.ta_stop_battery_soc) {
-		battery_log(BAT_LOG_CRTI, "[%s]Wait for PE detection\n", __func__);
-		do {
-			icount--;
-			msleep(200);
-		} while (icount && ta_check_chr_type);
-	}
+	battery_log(BAT_LOG_CRTI, "[%s]show_Pump_Express chr_type:%d UISOC2:%d startsoc:%d stopsoc:%d\n", __func__,
+	BMT_status.charger_type, BMT_status.UI_SOC2,
+	batt_cust_data.ta_start_battery_soc, batt_cust_data.ta_stop_battery_soc);
+
+#if defined(PUMP_EXPRESS_SERIES)
+	/* Is PE+20 connect */
+	if (mtk_pep20_get_is_connect())
+		is_ta_detected = 1;
+	battery_log(BAT_LOG_FULL, "%s: pep20_is_connect = %d\n",
+		__func__, mtk_pep20_get_is_connect());
+
+	/* Is PE+ connect */
+	if (mtk_pep_get_is_connect())
+		is_ta_detected = 1;
+	battery_log(BAT_LOG_FULL, "%s: pep_is_connect = %d\n",
+		__func__, mtk_pep_get_is_connect());
+
 #endif
 
 #if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT)
-
-	if ((KAL_TRUE == ta_check_chr_type) && (STANDARD_CHARGER == BMT_status.charger_type)) {
-		battery_log(BAT_LOG_CRTI, "[%s]Wait for PE detection\n", __func__);
-		do {
-			msleep(200);
-		} while (ta_check_chr_type);
-	}
+	/* Is PE connect */
+	if (is_ta_connect == KAL_TRUE)
+		is_ta_detected = 1;
 #endif
 
+	battery_log(BAT_LOG_CRTI, "%s: detected = %d\n",
+		__func__, is_ta_detected);
 
-	battery_log(BAT_LOG_CRTI, "Pump express = %d\n", is_ta_connect);
-	return sprintf(buf, "%u\n", is_ta_connect);
+	return sprintf(buf, "%u\n", is_ta_detected);
 }
 
 static ssize_t store_Pump_Express(struct device *dev, struct device_attribute *attr,
 				  const char *buf, size_t size)
 {
-	unsigned int val;
-
-	if (kstrtouint(buf, 10, &val) == 0) {
-		is_ta_connect = val;
-		battery_log(BAT_LOG_CRTI, "Pump express= %d\n", is_ta_connect);
-		return size;
-	}
-
-	/* hidden else, for sscanf format error */
-	{
-		battery_log(BAT_LOG_CRTI, "  bad argument, echo [enable] > current_cmd\n");
-	}
-
 	return 0;
 }
 
 static DEVICE_ATTR(Pump_Express, 0664, show_Pump_Express, store_Pump_Express);
-#endif
+
+
 
 static void mt_battery_update_EM(struct battery_data *bat_data)
 {
@@ -1618,13 +1702,15 @@ static void mt_battery_update_EM(struct battery_data *bat_data)
 	bat_data->BAT_BatterySenseVoltage = BMT_status.bat_vol;
 	bat_data->BAT_ISenseVoltage = BMT_status.Vsense;	/* API */
 	bat_data->BAT_ChargerVoltage = BMT_status.charger_vol;
+	bat_data->BAT_CURRENT_NOW = BMT_status.CURRENT_NOW * 100; /* 0.1mA to uA */
 	/* Dual battery */
 	bat_data->status_smb = g_status_smb;
 	bat_data->capacity_smb = g_capacity_smb;
 	bat_data->present_smb = g_present_smb;
 	battery_log(BAT_LOG_FULL, "status_smb = %d, capacity_smb = %d, present_smb = %d\n",
 		    bat_data->status_smb, bat_data->capacity_smb, bat_data->present_smb);
-	if ((BMT_status.UI_SOC2 == 100) && (BMT_status.charger_exist == KAL_TRUE))
+	if ((BMT_status.UI_SOC2 == 100) && (BMT_status.charger_exist == KAL_TRUE)
+	    && (BMT_status.bat_charging_state != CHR_ERROR))
 		bat_data->BAT_STATUS = POWER_SUPPLY_STATUS_FULL;
 
 #ifdef CONFIG_MTK_DISABLE_POWER_ON_OFF_VOLTAGE_LIMITATION
@@ -1643,6 +1729,9 @@ static void battery_update(struct battery_data *bat_data)
 	struct power_supply *bat_psy = &bat_data->psy;
 	static unsigned int shutdown_cnt = 0xBADDCAFE;
 	static unsigned int shutdown_cnt_chr = 0xBADDCAFE;
+	static unsigned int update_cnt = 6;
+	static unsigned int pre_uisoc2;
+	static unsigned int pre_chr_state;
 
 	if (shutdown_cnt == 0xBADDCAFE)
 		shutdown_cnt = 0;
@@ -1666,7 +1755,7 @@ static void battery_update(struct battery_data *bat_data)
 		}
 	} else {
 		/* Only Battery */
-		bat_data->BAT_STATUS = POWER_SUPPLY_STATUS_NOT_CHARGING;
+		bat_data->BAT_STATUS = POWER_SUPPLY_STATUS_DISCHARGING;
 	}
 
 	mt_battery_update_EM(bat_data);
@@ -1678,9 +1767,6 @@ static void battery_update(struct battery_data *bat_data)
 		bat_data->adjust_power = adjust_power;
 		battery_log(BAT_LOG_CRTI, "adjust_power=(%d)\n", adjust_power);
 	}
-	battery_log(BAT_LOG_CRTI,
-		    "[kernel][battery_update] SOC %d,UI_SOC2 %d, status %d\n",
-		    BMT_status.SOC, BMT_status.UI_SOC2, bat_data->BAT_STATUS);
 
 #ifdef DLPT_POWER_OFF_EN
 #ifndef DISABLE_DLPT_FEATURE
@@ -1692,12 +1778,13 @@ static void battery_update(struct battery_data *bat_data)
 
 		if (dlpt_check_power_off() == 1) {
 			bat_data->BAT_CAPACITY = 0;
+			BMT_status.UI_SOC2 = 0;
 			cnt++;
 			battery_log(BAT_LOG_CRTI,
 				    "[DLPT_POWER_OFF_EN] SOC=%d to power off , cnt=%d\n",
 				    bat_data->BAT_CAPACITY, cnt);
 
-			if (cnt >= 2)
+			if (cnt >= 4)
 				kernel_restart("DLPT reboot system");
 
 		} else {
@@ -1710,7 +1797,32 @@ static void battery_update(struct battery_data *bat_data)
 #endif
 #endif
 
-	power_supply_changed(bat_psy);
+	if (update_cnt == 6) {
+		/* Update per 60 seconds */
+		power_supply_changed(bat_psy);
+		pre_uisoc2 = BMT_status.UI_SOC2;
+		pre_chr_state = BMT_status.bat_charging_state;
+		update_cnt = 0;
+	} else if ((pre_uisoc2 != BMT_status.UI_SOC2) || (BMT_status.UI_SOC2 == 0)) {
+		/* Update when soc change */
+		power_supply_changed(bat_psy);
+		pre_uisoc2 = BMT_status.UI_SOC2;
+		update_cnt = 0;
+	} else if ((BMT_status.charger_exist == KAL_TRUE) &&
+			((pre_chr_state != BMT_status.bat_charging_state) ||
+			(BMT_status.bat_charging_state == CHR_ERROR))) {
+		/* Update when changer status change */
+		power_supply_changed(bat_psy);
+		pre_chr_state = BMT_status.bat_charging_state;
+		update_cnt = 0;
+	} else if (cable_in_uevent == 1) {
+		/*To prevent interrupt-trigger update from being filtered*/
+		power_supply_changed(bat_psy);
+		cable_in_uevent = 0;
+	} else {
+		/* No update */
+		update_cnt++;
+	}
 }
 
 void update_charger_info(int wireless_state)
@@ -2044,6 +2156,7 @@ void mt_battery_GetBatteryData(void)
 	static signed int batteryTempBuffer[BATTERY_AVERAGE_SIZE];
 	static unsigned char batteryIndex = 0xff;
 	static signed int previous_SOC = -1;
+	kal_bool current_sign;
 
 	if (batteryIndex == 0xff)
 		batteryIndex = 0;
@@ -2087,6 +2200,7 @@ void mt_battery_GetBatteryData(void)
 		    mt_battery_average_method(BATTERY_AVG_VOLT, &batteryVoltageBuffer[0], bat_vol,
 					      &bat_sum, batteryIndex);
 	}
+
 	BMT_status.temperature =
 	    mt_battery_average_method(BATTERY_AVG_TEMP, &batteryTempBuffer[0], temperature,
 				      &temperature_sum, batteryIndex);
@@ -2095,15 +2209,22 @@ void mt_battery_GetBatteryData(void)
 	BMT_status.temperatureV = temperatureV;
 	BMT_status.temperatureR = temperatureR;
 	BMT_status.ZCV = ZCV;
+	BMT_status.IBattery = battery_meter_get_battery_current();
+	BMT_status.CURRENT_NOW = BMT_status.IBattery;
+	current_sign = battery_meter_get_battery_current_sign();
+	BMT_status.IBattery *= (current_sign ? 1 : (-1));
 
 	batteryIndex++;
 	if (batteryIndex >= BATTERY_AVERAGE_SIZE)
 		batteryIndex = 0;
 
 	battery_log(BAT_LOG_CRTI,
-		    "[kernel]AvgVbat %d,bat_vol %d, AvgI %d, I %d, VChr %d, AvgT %d, T %d, ZCV %d\n",
-		    BMT_status.bat_vol, bat_vol, BMT_status.ICharging, ICharging,
-		    BMT_status.charger_vol, BMT_status.temperature, temperature, BMT_status.ZCV);
+		"[kernel]AvgVbat %d,bat_vol %d, AvgI %d, I %d, VChr %d, AvgT %d, T %d, ZCV %d, CHR_Type %d, SOC %3d:%3d:%3d, bcct %d:%d, Ichg %d, IBat %d\n",
+		BMT_status.bat_vol, bat_vol, BMT_status.ICharging, ICharging,
+		BMT_status.charger_vol, BMT_status.temperature, temperature, BMT_status.ZCV,
+		BMT_status.charger_type, BMT_status.SOC, BMT_status.UI_SOC, BMT_status.UI_SOC2,
+		g_bcct_flag, get_usb_current_unlimited(), get_bat_charging_current_level() / 100,
+		BMT_status.IBattery / 10);
 }
 
 
@@ -2512,7 +2633,7 @@ CHARGER_TYPE mt_charger_type_detection(void)
 		BMT_status.charger_type = CHR_Type_num;
 
 #if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)
-#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT) || defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
+#if defined(PUMP_EXPRESS_SERIES)
 		/*if (BMT_status.UI_SOC2 == 100) {
 			BMT_status.bat_charging_state = CHR_BATFULL;
 			BMT_status.bat_full = KAL_TRUE;
@@ -2538,6 +2659,13 @@ CHARGER_TYPE mt_charger_type_detection(void)
 	return BMT_status.charger_type;
 }
 
+void mt_charger_enable_DP_voltage(int ison)
+{
+	mutex_lock(&charger_type_mutex);
+	battery_charging_control(CHARGING_CMD_SET_DP, &ison);
+	mutex_unlock(&charger_type_mutex);
+}
+
 CHARGER_TYPE mt_get_charger_type(void)
 {
 #if defined(CONFIG_POWER_EXT) || defined(CONFIG_MTK_FPGA)
@@ -2557,8 +2685,14 @@ static void mt_battery_charger_detect_check(void)
 */
 	unsigned int pwr;
 #endif
+#ifdef CONFIG_TCPC_CLASS
+	uint8_t typec_state = TYPEC_UNATTACHED;
+#endif /* CONFIG_TCPC_CLASS */
+
 	if (upmu_is_chr_det() == KAL_TRUE) {
 		wake_lock(&battery_suspend_lock);
+
+	BMT_status.charger_vol = battery_meter_get_charger_voltage();
 
 #if !defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
 		BMT_status.charger_exist = KAL_TRUE;
@@ -2597,17 +2731,26 @@ static void mt_battery_charger_detect_check(void)
 		battery_charging_control(CHARGING_CMD_SET_CHRIND_CK_PDN, &pwr);
 #endif
 
-		battery_log(BAT_LOG_CRTI, "[BAT_thread]Cable in, CHR_Type_num=%d\r\n",
+		battery_log(BAT_LOG_FULL, "[BAT_thread]Cable in, CHR_Type_num=%d\r\n",
 			    BMT_status.charger_type);
 
-#if defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
-		/* is_ta_connect = KAL_FALSE; */
-		/* ta_check_chr_type = KAL_TRUE; */
-		ta_cable_out_occur = KAL_FALSE;
-		battery_log(BAT_LOG_FULL, "[PE+] Cable In\n");
-#endif
 
 	} else {
+#ifdef CONFIG_TCPC_CLASS
+		if (bat_is_kpoc()) {
+			if (!tcpc_dev) {
+				tcpc_dev = tcpc_dev_get_by_name("type_c_port0");
+				if (!tcpc_dev)
+					pr_err("%s get tcpc device type_c_port0 fail\n",
+						__func__);
+			} else
+				typec_state = tcpm_inquire_typec_attach_state(tcpc_dev);
+
+			if (typec_state != TYPEC_UNATTACHED)
+				return;
+		}
+#endif /* CONFIG_TCPC_CLASS */
+
 		wake_unlock(&battery_suspend_lock);
 
 		BMT_status.charger_exist = KAL_FALSE;
@@ -2621,16 +2764,15 @@ static void mt_battery_charger_detect_check(void)
 		BMT_status.TOPOFF_charging_time = 0;
 		BMT_status.POSTFULL_charging_time = 0;
 
-		battery_log(BAT_LOG_CRTI, "[BAT_thread]Cable out \r\n");
+		BMT_status.charger_vol = 0;
+
+		battery_log(BAT_LOG_FULL, "[BAT_thread]Cable out \r\n");
 
 		mt_usb_disconnect();
+		hw_bc11_dcd_release();
 
-#if defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
-		is_ta_connect = KAL_FALSE;
-		ta_check_chr_type = KAL_TRUE;
-		ta_cable_out_occur = KAL_TRUE;
 		battery_log(BAT_LOG_FULL, "[PE+] Cable OUT\n");
-#endif
+
 
 #ifdef CONFIG_MTK_BQ25896_SUPPORT
 /*New low power feature of MT6531: disable charger CLK without CHARIN.
@@ -2648,16 +2790,38 @@ static void mt_battery_charger_detect_check(void)
 static void mt_kpoc_power_off_check(void)
 {
 #ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING
-	battery_log(BAT_LOG_CRTI,
-		    "[mt_kpoc_power_off_check] , chr_vol=%d, boot_mode=%d\r\n",
-		    BMT_status.charger_vol, g_platform_boot_mode);
+#ifdef CONFIG_TCPC_CLASS
+	uint8_t typec_state = TYPEC_UNATTACHED;
+
+	if (!tcpc_dev) {
+		tcpc_dev = tcpc_dev_get_by_name("type_c_port0");
+		if (!tcpc_dev)
+			pr_err("%s get tcpc device type_c_port0 fail\n", __func__);
+	} else
+		typec_state = tcpm_inquire_typec_attach_state(tcpc_dev);
+#endif /* CONFIG_TCPC_CLASS */
+
 	if (g_platform_boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
 	    || g_platform_boot_mode == LOW_POWER_OFF_CHARGING_BOOT) {
-		if ((upmu_is_chr_det() == KAL_FALSE) && (BMT_status.charger_vol < 2500)) {	/* vbus < 2.5V */
+
+		battery_log(BAT_LOG_CRTI, "[mt_kpoc_power_off_check] chr_vol=%d, boot_mode=%d\r\n",
+		BMT_status.charger_vol, g_platform_boot_mode);
+
+
+#ifdef CONFIG_TCPC_CLASS
+		if ((upmu_is_chr_det() == KAL_FALSE) && (BMT_status.charger_vol < 2500)
+			&& typec_state == TYPEC_UNATTACHED) {	/* vbus < 2.5V */
 			battery_log(BAT_LOG_CRTI,
 				    "[mt_kpoc_power_off_check] Unplug Charger/USB In Kernel Power Off Charging Mode!  Shutdown OS!\r\n");
 			battery_charging_control(CHARGING_CMD_SET_POWER_OFF, NULL);
 		}
+#else
+		if ((upmu_is_chr_det() == KAL_FALSE) && (BMT_status.charger_vol < 2500)) {
+			battery_log(BAT_LOG_CRTI,
+				    "[mt_kpoc_power_off_check] Unplug Charger/USB In Kernel Power Off Charging Mode!  Shutdown OS!\r\n");
+			battery_charging_control(CHARGING_CMD_SET_POWER_OFF, NULL);
+		}
+#endif /* CONFIG_TCPC_CLASS */
 	}
 #endif
 }
@@ -2681,6 +2845,8 @@ void update_battery_2nd_info(int status_smb, int capacity_smb, int present_smb)
 
 void do_chrdet_int_task(void)
 {
+	u32 plug_out_aicr = 50000; /* 10uA */
+
 	if (g_bat_init_flag == KAL_TRUE) {
 #if !defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
 		if (upmu_is_chr_det() == KAL_TRUE) {
@@ -2710,6 +2876,13 @@ void do_chrdet_int_task(void)
 			battery_log(BAT_LOG_CRTI, "[do_chrdet_int_task] charger NOT exist!\n");
 			BMT_status.charger_exist = KAL_FALSE;
 
+			/* Reset AICR's upper bound calculated by AICL */
+			mtk_chr_reset_aicr_upper_bound();
+
+			/* Set AICR to 500mA if it is plugged out */
+			battery_charging_control(CHARGING_CMD_SET_INPUT_CURRENT,
+				&plug_out_aicr);
+
 #if defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
 			battery_log(BAT_LOG_CRTI,
 				    "turn off charging for no available charging source\n");
@@ -2717,8 +2890,14 @@ void do_chrdet_int_task(void)
 #endif
 
 #ifdef CONFIG_MTK_KERNEL_POWER_OFF_CHARGING
+#ifdef CONFIG_TCPC_CLASS
+			if ((g_platform_boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
+			    || g_platform_boot_mode == LOW_POWER_OFF_CHARGING_BOOT) &&
+				mtk_chr_is_kpoc_shutdown_enable()) {
+#else
 			if (g_platform_boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
 			    || g_platform_boot_mode == LOW_POWER_OFF_CHARGING_BOOT) {
+#endif /* CONFIG_TCPC_CLASS */
 				battery_log(BAT_LOG_CRTI,
 					    "[pmic_thread_kthread] Unplug Charger/USB In Kernel Power Off Charging Mode!  Shutdown OS!\r\n");
 				battery_charging_control(CHARGING_CMD_SET_POWER_OFF, NULL);
@@ -2740,20 +2919,26 @@ void do_chrdet_int_task(void)
 				return;
 			}
 #endif
-#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT) || defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
+
+			mtk_pep20_set_is_cable_out_occur(true);
+			mtk_pep_set_is_cable_out_occur(true);
+
+#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT)
 			is_ta_connect = KAL_FALSE;
 			ta_check_chr_type = KAL_TRUE;
 			ta_cable_out_occur = KAL_TRUE;
 #endif
-
 		}
+
+		cable_in_uevent = 1;
 
 		/* reset_parameter_dod_charger_plug_event(); */
 		wakeup_fg_algo(FG_CHARGER);
 		/* Place charger detection and battery update here is used to speed up charging icon display. */
 
 		mt_battery_charger_detect_check();
-		if (BMT_status.UI_SOC2 == 100 && BMT_status.charger_exist == KAL_TRUE) {
+		if (BMT_status.UI_SOC2 == 100 && BMT_status.charger_exist == KAL_TRUE
+		    && BMT_status.bat_charging_state != CHR_ERROR) {
 			BMT_status.bat_charging_state = CHR_BATFULL;
 			BMT_status.bat_full = KAL_TRUE;
 			g_charging_full_reset_bat_meter = KAL_TRUE;
@@ -2819,10 +3004,11 @@ void BAT_thread(void)
 	mt_battery_thermal_check();
 	mt_battery_notify_check();
 
-	if (BMT_status.charger_exist == KAL_TRUE) {
+	if ((BMT_status.charger_exist == KAL_TRUE) && (battery_suspended == KAL_FALSE)) {
 		mt_battery_CheckBatteryStatus();
 		mt_battery_charging_algorithm();
 	}
+
 	mt_kpoc_power_off_check();
 }
 
@@ -2834,6 +3020,10 @@ int bat_routine_thread(void *x)
 	ktime_t ktime = ktime_set(3, 0);	/* 10s, 10* 1000 ms */
 
 	/* Run on a process content */
+#if defined(BATTERY_SW_INIT)
+	battery_charging_control(CHARGING_CMD_SW_INIT, NULL);
+#endif
+
 	while (1) {
 		wake_lock(&battery_meter_lock);
 		mutex_lock(&bat_mutex);
@@ -2890,6 +3080,9 @@ int bat_update_thread(void *x)
 	/* Run on a process content */
 	while (1) {
 		mutex_lock(&bat_update_mutex);
+#ifdef USING_SMOOTH_UI_SOC2
+		battery_meter_smooth_uisoc2();
+#endif
 		mt_battery_update_status();
 		mutex_unlock(&bat_update_mutex);
 
@@ -2920,8 +3113,7 @@ static long adc_cali_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 	int ret = 0;
 	int adc_in_data[2] = { 1, 1 };
 	int adc_out_data[2] = { 1, 1 };
-
-	mutex_lock(&bat_mutex);
+	int temp_car_tune;
 
 	switch (cmd) {
 	case TEST_ADC_CALI_PRINT:
@@ -3028,6 +3220,8 @@ static long adc_cali_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 		break;
 
 	case Set_Charger_Current:	/* For Factory Mode */
+		mutex_lock(&bat_mutex);
+
 		user_data_addr = (int *)arg;
 		ret = copy_from_user(charging_level_data, user_data_addr, 4);
 		g_ftm_battery_flag = KAL_TRUE;
@@ -3065,6 +3259,9 @@ static long adc_cali_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 			charging_level_data[0] = CHARGE_CURRENT_1600_00_MA;
 		else
 			charging_level_data[0] = CHARGE_CURRENT_450_00_MA;
+
+		mutex_unlock(&bat_mutex);
+
 		wake_up_bat();
 		battery_log(BAT_LOG_CRTI, "**** unlocked_ioctl : set_Charger_Current:%d\n",
 			    charging_level_data[0]);
@@ -3088,18 +3285,27 @@ static long adc_cali_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 	case Get_META_BAT_CAR_TUNE_VALUE:
 		user_data_addr = (int *)arg;
 		ret = copy_from_user(adc_in_data, user_data_addr, 8);
-		battery_log(BAT_LOG_CRTI, "Get_BAT_CAR_TUNE_VALUE\n");
-		adc_out_data[1] = 117;	/* Todo: change this line to get current/impedance/... */
+		adc_out_data[0] = batt_meter_cust_data.car_tune_value;
+		battery_log(BAT_LOG_CRTI, "Get_BAT_CAR_TUNE_VALUE, res=%d\n", adc_out_data[0]);
 		ret = copy_to_user(user_data_addr, adc_out_data, 8);
 
 		break;
 
 	case Set_META_BAT_CAR_TUNE_VALUE:
+
+		/* meta tool input: adc_in_data[1] (mA)*/
 		user_data_addr = (int *)arg;
 		ret = copy_from_user(adc_in_data, user_data_addr, 8);
-		battery_log(BAT_LOG_CRTI, "Set_BAT_CAR_TUNE_VALUE:%d\n", adc_in_data[1]);
-		adc_out_data[1] = adc_in_data[1];
+
+		/* Send cali_current to hal to calculate car_tune_value*/
+		temp_car_tune = battery_meter_meta_tool_cali_car_tune(adc_in_data[1]);
+
+		/* return car_tune_value to meta tool in adc_out_data[0] */
+		batt_meter_cust_data.car_tune_value = temp_car_tune / 10;
+		adc_out_data[0] = temp_car_tune;
 		ret = copy_to_user(user_data_addr, adc_out_data, 8);
+		pr_err("Set_BAT_CAR_TUNE_VALUE[%d], res=%d, ret=%d\n",
+			adc_in_data[1], adc_out_data[0], ret);
 
 		break;
 		/* add bing meta tool------------------------------- */
@@ -3108,8 +3314,6 @@ static long adc_cali_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 		g_ADC_Cali = KAL_FALSE;
 		break;
 	}
-
-	mutex_unlock(&bat_mutex);
 
 	return 0;
 }
@@ -3176,7 +3380,7 @@ int charger_hv_detect_sw_thread_handler(void *unused)
 	ktime_t ktime;
 	unsigned int charging_enable;
 	unsigned int hv_voltage = batt_cust_data.v_charger_max * 1000;
-	kal_bool hv_status;
+	kal_bool hv_status = KAL_FALSE;
 
 
 #if defined(CONFIG_MTK_DUAL_INPUT_CHARGER_SUPPORT)
@@ -3186,7 +3390,7 @@ int charger_hv_detect_sw_thread_handler(void *unused)
 	do {
 #ifdef CONFIG_MTK_BQ25896_SUPPORT
 		/*this annoying SW workaround wakes up bat_thread. 10 secs is set instead of 1 sec */
-		ktime = ktime_set(10, 0);
+		ktime = ktime_set(BAT_TASK_PERIOD, 0);
 #else
 		ktime = ktime_set(0, BAT_MS_TO_NS(1000));
 #endif
@@ -3255,7 +3459,6 @@ void charger_hv_detect_sw_workaround_init(void)
 			    "[%s]: failed to create charger_hv_detect_sw_workaround thread\n",
 			    __func__);
 	}
-	check_battery_exist();
 	battery_log(BAT_LOG_CRTI, "charger_hv_detect_sw_workaround_init : done\n");
 }
 
@@ -3273,7 +3476,7 @@ void battery_kthread_hrtimer_init(void)
 
 #ifdef CONFIG_MTK_BQ25896_SUPPORT
 /*watchdog timer before 40 secs*/
-	ktime = ktime_set(10, 0);	/* 3s, 10* 1000 ms */
+	ktime = ktime_set(BAT_TASK_PERIOD, 0);	/* 3s, 10* 1000 ms */
 #else
 	ktime = ktime_set(1, 0);
 #endif
@@ -3536,7 +3739,6 @@ static int __batt_init_cust_data_from_dt(void)
 	/* check customer setting */
 	np = of_find_compatible_node(NULL, NULL, "mediatek,battery");
 	if (!np) {
-		/* printk(KERN_ERR "(E) Failed to find device-tree node: %s\n", path); */
 		battery_log(BAT_LOG_CRTI, "Failed to find device-tree node: bat_comm\n");
 		return -ENODEV;
 	}
@@ -3759,17 +3961,23 @@ static int battery_probe(struct platform_device *dev)
 	get_charging_control();
 
 	batt_init_cust_data();
-#if defined(BATTERY_SW_INIT)
-	battery_charging_control(CHARGING_CMD_SW_INIT, NULL);
-#endif
 
 	battery_charging_control(CHARGING_CMD_GET_PLATFORM_BOOT_MODE, &g_platform_boot_mode);
 	battery_log(BAT_LOG_CRTI, "[BAT_probe] g_platform_boot_mode = %d\n ", g_platform_boot_mode);
 
 	wake_lock_init(&battery_suspend_lock, WAKE_LOCK_SUSPEND, "battery suspend wakelock");
 	wake_lock_init(&battery_meter_lock, WAKE_LOCK_SUSPEND, "battery meter wakelock");
-#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT) || defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
+#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT)
 	wake_lock_init(&TA_charger_suspend_lock, WAKE_LOCK_SUSPEND, "TA charger suspend wakelock");
+#endif
+
+	mtk_pep_init();
+	mtk_pep20_init();
+
+#ifdef CONFIG_TCPC_CLASS
+	tcpc_dev = tcpc_dev_get_by_name("type_c_port0");
+	if (!tcpc_dev)
+		pr_err("%s get tcpc device type_c_port0 fail\n", __func__);
 #endif
 
 	/* Integrate with Android Battery Service */
@@ -3865,9 +4073,8 @@ static int battery_probe(struct platform_device *dev)
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_FG_SW_CoulombCounter);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Charging_CallState);
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Charger_Type);
-#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT) || defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
 		ret_device_file = device_create_file(&(dev->dev), &dev_attr_Pump_Express);
-#endif
+
 	}
 
 	/* battery_meter_initial();      //move to mt_battery_GetBatteryData() to decrease booting time */
@@ -3994,6 +4201,26 @@ static void battery_timer_resume(void)
 	/* restore timer */
 	hrtimer_start(&battery_kthread_timer, ktime, HRTIMER_MODE_REL);
 	hrtimer_start(&charger_hv_detect_timer, hvtime, HRTIMER_MODE_REL);
+#if defined(CONFIG_MTK_PMIC_CHIP_MT6353)
+	battery_log(BAT_LOG_CRTI,
+		 "[fg reg] current:0x%x 0x%x low:0x%x 0x%x high:0x%x 0x%x\r\n",
+		pmic_get_register_value(PMIC_FG_CAR_18_03), pmic_get_register_value(PMIC_FG_CAR_34_19),
+		pmic_get_register_value(PMIC_FG_BLTR_15_00), pmic_get_register_value(PMIC_FG_BLTR_31_16),
+		pmic_get_register_value(PMIC_FG_BFTR_15_00), pmic_get_register_value(PMIC_FG_BFTR_31_16));
+
+	{
+		signed int cur, low, high;
+
+		cur = (pmic_get_register_value(PMIC_FG_CAR_18_03));
+		cur |= ((pmic_get_register_value(PMIC_FG_CAR_34_19)) & 0xffff) << 16;
+		low = (pmic_get_register_value(PMIC_FG_BLTR_15_00));
+		low |= ((pmic_get_register_value(PMIC_FG_BLTR_31_16)) & 0xffff) << 16;
+		high = (pmic_get_register_value(PMIC_FG_BFTR_15_00));
+		high |= ((pmic_get_register_value(PMIC_FG_BFTR_31_16)) & 0xffff) << 16;
+		battery_log(BAT_LOG_CRTI,
+			 "[fg reg] current:%d low:%d high:%d\r\n", cur, low, high);
+	}
+#else
 /*
 	battery_log(BAT_LOG_CRTI,
 		 "[fg reg] current:0x%x 0x%x low:0x%x 0x%x high:0x%x 0x%x\r\n",
@@ -4014,6 +4241,7 @@ static void battery_timer_resume(void)
 			 "[fg reg] current:%d low:%d high:%d\r\n", cur, low, high);
 	}
 */
+#endif
 
 	battery_suspended = KAL_FALSE;
 	battery_log(BAT_LOG_CRTI, "@bs=0@\n");
@@ -4031,14 +4259,14 @@ static int battery_remove(struct platform_device *dev)
 
 static void battery_shutdown(struct platform_device *dev)
 {
-#if defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
-	CHR_CURRENT_ENUM input_current = CHARGE_CURRENT_70_00_MA;
+	if (mtk_pep_get_is_connect() || mtk_pep20_get_is_connect()) {
+		CHR_CURRENT_ENUM input_current = CHARGE_CURRENT_70_00_MA;
 
-	battery_charging_control(CHARGING_CMD_SET_INPUT_CURRENT, &input_current);
-	battery_log(BAT_LOG_CRTI, "[PE+] Resetting TA adapter before shutdown\n");
-#endif
-	battery_log(BAT_LOG_CRTI, "******** battery driver shutdown!! ********\n");
-
+		battery_charging_control(CHARGING_CMD_SET_INPUT_CURRENT,
+				&input_current);
+		battery_log(BAT_LOG_CRTI, "%s: reset TA before shutdown\n",
+			__func__);
+	}
 }
 
 /* ///////////////////////////////////////////////////////////////////////////////////////// */
@@ -4201,7 +4429,7 @@ static ssize_t current_cmd_write(struct file *file, const char *buffer, size_t c
 		battery_charging_control(CHARGING_CMD_ENABLE, &charging_enable);
 
 		battery_log(BAT_LOG_CRTI,
-			    "[current_cmd_write] cmd_current_unlimited=%d, cmd_discharging=%d\n",
+		"[current_cmd_write] cmd_current_unlimited=%d, cmd_discharging=%d\n",
 			    cmd_current_unlimited, cmd_discharging);
 		return count;
 	}
@@ -4260,6 +4488,92 @@ static ssize_t discharging_cmd_write(struct file *file, const char *buffer, size
 	return -EINVAL;
 }
 
+static int cmd_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+	return 0;
+}
+
+static ssize_t power_path_cmd_read(struct file *file, char __user *user_buffer,
+	size_t count, loff_t *position)
+{
+	char buf[256];
+	bool power_path_en = true;
+
+	battery_charging_control(CHARGING_CMD_GET_IS_POWER_PATH_ENABLE,
+		&power_path_en);
+	count = sprintf(buf, "%d\n", power_path_en);
+
+	return simple_read_from_buffer(user_buffer, count, position, buf,
+		strlen(buf));
+}
+
+static ssize_t power_path_cmd_write(struct file *file, const char *buffer,
+	size_t count, loff_t *data)
+{
+	int len = 0, ret = 0;
+	char desc[32];
+	u32 enable = 0;
+
+	len = (count < (sizeof(desc) - 1)) ? count : (sizeof(desc) - 1);
+	if (copy_from_user(desc, buffer, len))
+		return 0;
+
+	desc[len] = '\0';
+
+	ret = kstrtou32(desc, 10, &enable);
+	if (ret == 0) {
+		battery_charging_control(CHARGING_CMD_ENABLE_POWER_PATH,
+			&enable);
+		battery_log(BAT_LOG_CRTI, "%s: enable power path = %d\n",
+			__func__, enable);
+		return count;
+	}
+
+	battery_log(BAT_LOG_CRTI, "bad argument, echo [enable] > power_path\n");
+	return count;
+}
+
+static ssize_t safety_timer_cmd_read(struct file *file, char __user *user_buffer,
+	size_t count, loff_t *position)
+{
+	char buf[256];
+	bool safety_timer_en = true;
+
+	battery_charging_control(CHARGING_CMD_GET_IS_SAFETY_TIMER_ENABLE,
+		&safety_timer_en);
+	count = sprintf(buf, "%d\n", safety_timer_en);
+
+	return simple_read_from_buffer(user_buffer, count, position, buf,
+		strlen(buf));
+}
+
+static ssize_t safety_timer_cmd_write(struct file *file, const char *buffer,
+	size_t count, loff_t *data)
+{
+	int len = 0, ret = 0;
+	char desc[32];
+	u32 enable = 0;
+
+	len = (count < (sizeof(desc) - 1)) ? count : (sizeof(desc) - 1);
+	if (copy_from_user(desc, buffer, len))
+		return 0;
+
+	desc[len] = '\0';
+
+	ret = kstrtou32(desc, 10, &enable);
+	if (ret == 0) {
+		battery_charging_control(CHARGING_CMD_ENABLE_SAFETY_TIMER,
+			&enable);
+		battery_log(BAT_LOG_CRTI, "%s: enable safety timer = %d\n",
+			__func__, enable);
+		return count;
+	}
+
+	battery_log(BAT_LOG_CRTI, "bad argument, echo [enable] > safety_timer\n");
+	return count;
+}
+
 static const struct file_operations discharging_cmd_proc_fops = {
 	.open = proc_utilization_open,
 	.read = seq_read,
@@ -4272,10 +4586,23 @@ static const struct file_operations current_cmd_proc_fops = {
 	.write = current_cmd_write,
 };
 
+static const struct file_operations power_path_cmd_fops = {
+	.owner = THIS_MODULE,
+	.open = cmd_open,
+	.read = power_path_cmd_read,
+	.write = power_path_cmd_write,
+};
+
+static const struct file_operations safety_timer_cmd_fops = {
+	.owner = THIS_MODULE,
+	.open = cmd_open,
+	.read = safety_timer_cmd_read,
+	.write = safety_timer_cmd_write,
+};
+
 static int mt_batteryNotify_probe(struct platform_device *dev)
 {
 	int ret_device_file = 0;
-	/* struct proc_dir_entry *entry = NULL; */
 	struct proc_dir_entry *battery_dir = NULL;
 
 	battery_log(BAT_LOG_CRTI, "******** mt_batteryNotify_probe!! ********\n");
@@ -4283,34 +4610,35 @@ static int mt_batteryNotify_probe(struct platform_device *dev)
 	ret_device_file = device_create_file(&(dev->dev), &dev_attr_BatteryNotify);
 	ret_device_file = device_create_file(&(dev->dev), &dev_attr_BN_TestMode);
 
+	/* Create mtk_battery_cmd directory */
 	battery_dir = proc_mkdir("mtk_battery_cmd", NULL);
 	if (!battery_dir) {
 		pr_err("[%s]: mkdir /proc/mtk_battery_cmd failed\n", __func__);
-	} else {
-#if 1
-		proc_create("battery_cmd", S_IRUGO | S_IWUSR, battery_dir, &battery_cmd_proc_fops);
-		battery_log(BAT_LOG_CRTI, "proc_create battery_cmd_proc_fops\n");
-
-		proc_create("current_cmd", S_IRUGO | S_IWUSR, battery_dir, &current_cmd_proc_fops);
-		battery_log(BAT_LOG_CRTI, "proc_create current_cmd_proc_fops\n");
-		proc_create("discharging_cmd", S_IRUGO | S_IWUSR, battery_dir,
-			    &discharging_cmd_proc_fops);
-		battery_log(BAT_LOG_CRTI, "proc_create discharging_cmd_proc_fops\n");
-
-
-#else
-		entry = create_proc_entry("battery_cmd", S_IRUGO | S_IWUSR, battery_dir);
-		if (entry) {
-			entry->read_proc = battery_cmd_read;
-			entry->write_proc = battery_cmd_write;
-		}
-#endif
+		goto _out;
 	}
 
+	/* Create nodes */
+	proc_create("battery_cmd", S_IRUGO | S_IWUSR, battery_dir, &battery_cmd_proc_fops);
+	battery_log(BAT_LOG_CRTI, "proc_create battery_cmd_proc_fops\n");
+
+	proc_create("current_cmd", S_IRUGO | S_IWUSR, battery_dir, &current_cmd_proc_fops);
+	battery_log(BAT_LOG_CRTI, "proc_create current_cmd_proc_fops\n");
+
+	proc_create("discharging_cmd", S_IRUGO | S_IWUSR, battery_dir,
+			&discharging_cmd_proc_fops);
+	battery_log(BAT_LOG_CRTI, "proc_create discharging_cmd_proc_fops\n");
+
+	proc_create("en_power_path", S_IRUGO | S_IWUSR, battery_dir,
+		&power_path_cmd_fops);
+	battery_log(BAT_LOG_CRTI, "proc_create power_path_proc_fops\n");
+
+	proc_create("en_safety_timer", S_IRUGO | S_IWUSR, battery_dir,
+		&safety_timer_cmd_fops);
+	battery_log(BAT_LOG_CRTI, "proc_create safety_timer_proc_fops\n");
+
+_out:
 	battery_log(BAT_LOG_CRTI, "******** mtk_battery_cmd!! ********\n");
-
 	return 0;
-
 }
 
 #ifdef CONFIG_OF
@@ -4479,26 +4807,26 @@ static int battery_pm_event(struct notifier_block *notifier, unsigned long pm_ev
 {
 	switch (pm_event) {
 	case PM_HIBERNATION_PREPARE:	/* Going to hibernate */
-		pr_warn("[%s] pm_event %lu (IPOH)\n", __func__, pm_event);
+		battery_log(BAT_LOG_FULL, "[%s] pm_event %lu (IPOH)\n", __func__, pm_event);
 		Is_In_IPOH = TRUE;
 	case PM_RESTORE_PREPARE:	/* Going to restore a saved image */
 	case PM_SUSPEND_PREPARE:	/* Going to suspend the system */
-		pr_warn("[%s] pm_event %lu\n", __func__, pm_event);
+		battery_log(BAT_LOG_FULL, "[%s] pm_event %lu\n", __func__, pm_event);
 		battery_timer_pause();
 		return NOTIFY_DONE;
 
 	case PM_POST_SUSPEND:	/* Suspend finished */
 	case PM_POST_RESTORE:	/* Restore failed */
-		pr_warn("[%s] pm_event %lu\n", __func__, pm_event);
+		battery_log(BAT_LOG_FULL, "[%s] pm_event %lu\n", __func__, pm_event);
 		battery_timer_resume();
 		return NOTIFY_DONE;
 
 	case PM_POST_HIBERNATION:	/* Hibernation finished */
-		pr_warn("[%s] pm_event %lu\n", __func__, pm_event);
+		battery_log(BAT_LOG_FULL, "[%s] pm_event %lu\n", __func__, pm_event);
 		fg_ipoh_reset = 1;
 		battery_timer_resume();
 		if (pending_wake_up_bat) {
-			pr_warn("[%s] PM_POST_HIBERNATION b4r wakeup bat_routine_wq\n", __func__);
+			battery_log(BAT_LOG_FULL, "[%s] PM_POST_HIBERNATION b4r wakeup bat_routine_wq\n", __func__);
 			wake_up(&bat_routine_wq);
 		}
 		pending_wake_up_bat = FALSE;
@@ -4513,6 +4841,25 @@ static struct notifier_block battery_pm_notifier_block = {
 	.notifier_call = battery_pm_event,
 	.priority = 0,
 };
+
+static void battery_init_work_callback(struct work_struct *work)
+{
+	int ret = 0;
+
+	battery_log(BAT_LOG_CRTI, "battery_init_work\n");
+
+#ifdef CONFIG_OF
+	ret = platform_driver_register(&battery_dts_driver);
+	ret = platform_driver_register(&mt_batteryNotify_dts_driver);
+#endif
+
+	ret = register_pm_notifier(&battery_pm_notifier_block);
+	if (ret)
+		battery_log(BAT_LOG_CRTI, "[%s] failed to register PM notifier %d\n", __func__,
+			    ret);
+
+	battery_log(BAT_LOG_CRTI, "****[battery_driver] Initialization : DONE !!\n");
+}
 
 static int __init battery_init(void)
 {
@@ -4557,16 +4904,14 @@ static int __init battery_init(void)
 			    "****[mt_batteryNotify] Unable to register driver (%d)\n", ret);
 		return ret;
 	}
-#ifdef CONFIG_OF
-	ret = platform_driver_register(&battery_dts_driver);
-	ret = platform_driver_register(&mt_batteryNotify_dts_driver);
-#endif
-	ret = register_pm_notifier(&battery_pm_notifier_block);
-	if (ret)
-		battery_log(BAT_LOG_CRTI, "[%s] failed to register PM notifier %d\n", __func__,
-			    ret);
 
-	battery_log(BAT_LOG_CRTI, "****[battery_driver] Initialization : DONE !!\n");
+	battery_init_workqueue = create_singlethread_workqueue("mtk-battery");
+	INIT_WORK(&battery_init_work, battery_init_work_callback);
+
+	ret = queue_work(battery_init_workqueue, &battery_init_work);
+	if (!ret)
+		pr_err("battery_init failed\n");
+
 	return 0;
 }
 

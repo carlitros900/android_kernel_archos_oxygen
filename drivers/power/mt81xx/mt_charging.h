@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef CHARGING_H
 #define CHARGING_H
 
@@ -47,6 +60,10 @@ enum CHARGER_TYPE {
 	APPLE_2_1A_CHARGER,	/* 2.1A apple charger */
 	APPLE_1_0A_CHARGER,	/* 1A apple charger */
 	APPLE_0_5A_CHARGER,	/* 0.5A apple charger */
+	TYPEC_1_5A_CHARGER, /* TypeC 5V1.5A charger */
+	TYPEC_3A_CHARGER, /*TypeC 5V3A charger */
+	TYPEC_PD_5V_CHARGER, /* PD 5V charger */
+	TYPEC_PD_12V_CHARGER, /* PD 12V charger */
 };
 
 
@@ -390,6 +407,7 @@ int bat_charger_register(CHARGING_CONTROL ctrl);
 
 /* Common battery interface exposed to USB code */
 int bat_charger_type_detection(void);
+void bat_update_charger_type(int new_type);
 void bat_detect_set_usb_host_mode(bool usb_host_mode);
 void bat_charger_update_usb_state(int usb_state);
 

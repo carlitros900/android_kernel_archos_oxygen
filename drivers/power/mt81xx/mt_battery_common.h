@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef BATTERY_COMMON_H
 #define BATTERY_COMMON_H
 
@@ -111,6 +124,7 @@ struct battery_common_data {
 	bool init_done:1;
 	bool down:1;
 	bool usb_host_mode:1;
+	bool usb_connect_ready:1;
 	CHARGING_CONTROL charger;
 };
 
@@ -212,12 +226,13 @@ static inline int bat_charger_get_charger_type(void)
 {
 	int chr_type = CHARGER_UNKNOWN;
 
-	if (g_bat.charger)
+	if (g_bat.usb_connect_ready && g_bat.charger)
 		g_bat.charger(CHARGING_CMD_GET_CHARGER_TYPE, &chr_type);
-
-#if defined(CONFIG_POWER_EXT) && defined(NO_EXTERNAL_CHARGER)
-	chr_type = STANDARD_HOST;
+	else {
+#if defined(CONFIG_POWER_EXT)
+		chr_type = STANDARD_HOST;
 #endif
+	}
 	return chr_type;
 }
 
@@ -336,6 +351,7 @@ extern void mt_power_off(void);
 extern bool mt_usb_is_device(void);
 extern void mt_usb_connect(void);
 extern void mt_usb_disconnect(void);
+extern bool mt_usb_is_ready(void);
 extern int set_rtc_spare_fg_value(int val);
 extern int get_rtc_spare_fg_value(void);
 

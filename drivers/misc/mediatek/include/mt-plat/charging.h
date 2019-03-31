@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 /*****************************************************************************
  *
  * Filename:
@@ -41,6 +54,7 @@
 #ifndef CONFIG_ARCH_MT8173
 #include <mach/mt_charging.h>
 #endif
+#include <linux/types.h>
 
 /* ============================================================ */
 /* define */
@@ -109,6 +123,37 @@ typedef enum {
 	CHARGING_CMD_ENABLE_SAFETY_TIMER,
 	CHARGING_CMD_SET_HIZ_SWCHR,
 	CHARGING_CMD_GET_BIF_TBAT,
+	CHARGING_CMD_SET_TA20_RESET,
+	CHARGING_CMD_SET_TA20_CURRENT_PATTERN,
+	CHARGING_CMD_SET_DP,
+	CHARGING_CMD_GET_CHARGER_TEMPERATURE,
+	CHARGING_CMD_SET_BOOST_CURRENT_LIMIT,
+	CHARGING_CMD_ENABLE_OTG,
+	CHARGING_CMD_ENABLE_POWER_PATH,
+	CHARGING_CMD_GET_BIF_IS_EXIST,
+	CHARGING_CMD_GET_INPUT_CURRENT,
+	CHARGING_CMD_ENABLE_DIRECT_CHARGE,
+	CHARGING_CMD_GET_IS_POWER_PATH_ENABLE,
+	CHARGING_CMD_GET_IS_SAFETY_TIMER_ENABLE,
+	CHARGING_CMD_SET_PWRSTAT_LED_EN,
+	CHARGING_CMD_GET_IBUS,
+	CHARGING_CMD_GET_VBUS,
+	CHARGING_CMD_RESET_DC_WATCH_DOG_TIMER,
+	CHARGING_CMD_RUN_AICL,
+	CHARGING_CMD_SET_IRCMP_RESISTOR,
+	CHARGING_CMD_SET_IRCMP_VOLT_CLAMP,
+	CHARGING_CMD_ENABLE_DC_VBUSOV,
+	CHARGING_CMD_SET_DC_VBUSOV,
+	CHARGING_CMD_ENABLE_DC_VBUSOC,
+	CHARGING_CMD_SET_DC_VBUSOC,
+	CHARGING_CMD_ENABLE_DC_VBATOV,
+	CHARGING_CMD_SET_DC_VBATOV,
+	CHARGING_CMD_GET_IS_DC_ENABLE,
+	CHARGING_CMD_SET_PEP20_EFFICIENCY_TABLE,
+	CHARGING_CMD_ENABLE_CHR_TYPE_DET,
+	CHARGING_CMD_ENABLE_DISCHARGE,
+	CHARGING_CMD_GET_TBUS,
+	CHARGING_CMD_GET_TBAT,
 	CHARGING_CMD_NUMBER
 } CHARGING_CTRL_CMD;
 
@@ -264,22 +309,33 @@ typedef enum {
 	BATTERY_VOLT_03_740000_V = 3740000,
 	BATTERY_VOLT_03_750000_V = 3750000,
 	BATTERY_VOLT_03_760000_V = 3760000,
+	BATTERY_VOLT_03_762500_V = 3762500,
 	BATTERY_VOLT_03_775000_V = 3775000,
 	BATTERY_VOLT_03_780000_V = 3780000,
+	BATTERY_VOLT_03_787500_V = 3787500,
 	BATTERY_VOLT_03_800000_V = 3800000,
+	BATTERY_VOLT_03_812500_V = 3812500,
 	BATTERY_VOLT_03_820000_V = 3820000,
 	BATTERY_VOLT_03_825000_V = 3825000,
+	BATTERY_VOLT_03_837500_V = 3837500,
 	BATTERY_VOLT_03_840000_V = 3840000,
 	BATTERY_VOLT_03_850000_V = 3850000,
 	BATTERY_VOLT_03_860000_V = 3860000,
+	BATTERY_VOLT_03_862500_V = 3862500,
+	BATTERY_VOLT_03_875000_V = 3875000,
 	BATTERY_VOLT_03_880000_V = 3880000,
+	BATTERY_VOLT_03_887500_V = 3887500,
 	BATTERY_VOLT_03_900000_V = 3900000,
+	BATTERY_VOLT_03_912500_V = 3912500,
 	BATTERY_VOLT_03_920000_V = 3920000,
+	BATTERY_VOLT_03_925000_V = 3925000,
+	BATTERY_VOLT_03_937500_V = 3937500,
 	BATTERY_VOLT_03_940000_V = 3940000,
 	BATTERY_VOLT_03_950000_V = 3950000,
 	BATTERY_VOLT_03_960000_V = 3960000,
 	BATTERY_VOLT_03_975000_V = 3975000,
 	BATTERY_VOLT_03_980000_V = 3980000,
+	BATTERY_VOLT_03_987500_V = 3987500,
 	BATTERY_VOLT_04_000000_V = 4000000,
 	BATTERY_VOLT_04_012500_V = 4012500,
 	BATTERY_VOLT_04_020000_V = 4020000,
@@ -486,6 +542,49 @@ typedef enum {
 	CHARGE_CURRENT_MAX
 } CHR_CURRENT_ENUM;
 
+/* Enum of charger current List */
+typedef enum {
+	CHR_VOLT_00_500000_V = 500,
+	CHR_VOLT_01_000000_V = 1000,
+	CHR_VOLT_04_000000_V = 4000,
+	CHR_VOLT_04_500000_V = 4500,
+	CHR_VOLT_05_000000_V = 5000,
+	CHR_VOLT_05_500000_V = 5500,
+	CHR_VOLT_06_000000_V = 6050,
+	CHR_VOLT_06_500000_V = 6500,
+	CHR_VOLT_07_000000_V = 7000,
+	CHR_VOLT_07_500000_V = 7500,
+	CHR_VOLT_08_000000_V = 8000,
+	CHR_VOLT_08_500000_V = 8500,
+	CHR_VOLT_09_000000_V = 9000,
+	CHR_VOLT_09_500000_V = 9500,
+	CHR_VOLT_10_000000_V = 10000,
+	CHR_VOLT_10_500000_V = 10500,
+	CHR_VOLT_11_000000_V = 11000,
+	CHR_VOLT_11_500000_V = 11500,
+	CHR_VOLT_12_000000_V = 12000,
+	CHR_VOLT_12_500000_V = 12500,
+	CHR_VOLT_13_000000_V = 13000,
+	CHR_VOLT_13_500000_V = 13500,
+	CHR_VOLT_14_000000_V = 14000,
+	CHR_VOLT_14_500000_V = 14500,
+	CHR_VOLT_15_000000_V = 15000,
+	CHR_VOLT_15_500000_V = 15500,
+	CHR_VOLT_16_000000_V = 16000,
+	CHR_VOLT_16_500000_V = 16500,
+	CHR_VOLT_17_000000_V = 17000,
+	CHR_VOLT_17_500000_V = 17500,
+	CHR_VOLT_18_000000_V = 18000,
+	CHR_VOLT_18_500000_V = 18500,
+	CHR_VOLT_19_000000_V = 19000,
+	CHR_VOLT_19_500000_V = 19500,
+	CHR_VOLT_20_000000_V = 20000,
+	CHR_VOLT_MAX,
+
+} CHR_VOLTAGE_ENUM;
+
+
+
 /* ============================================================ */
 /* structure */
 /* ============================================================ */
@@ -510,7 +609,7 @@ typedef enum {
 /* ============================================================ */
 extern int Enable_BATDRV_LOG;
 extern kal_bool chargin_hw_init_done;
-
+extern unsigned int g_bcct_flag;
 
 /* ============================================================ */
 /* External function */
@@ -520,12 +619,20 @@ extern unsigned int upmu_get_reg_value(unsigned int reg);
 extern void Charger_Detect_Init(void);
 extern void Charger_Detect_Release(void);
 extern int hw_charging_get_charger_type(void);
+extern void hw_bc11_dcd_release(void) __attribute__((weak));
 extern void mt_power_off(void);
 extern unsigned int mt6311_get_chip_id(void);
 extern int is_mt6311_exist(void);
 extern int is_mt6311_sw_ready(void);
 
+extern void hw_charging_enable_dp_voltage(int ison);
 
+/* For RT5735A SDA low workaround */
+extern void battery_disable_batfet(void);
+
+/* switch charger */
+extern void switch_charger_set_vindpm(unsigned int chr_v);
+extern int mtk_get_dynamic_cv(unsigned int *cv);
 /*extern BATTERY_VOLTAGE_ENUM battery_get_cv_voltage(void);*/
 /*extern void battery_set_cv_voltage(BATTERY_VOLTAGE_ENUM cv);*/
 
@@ -536,4 +643,30 @@ __weak kal_bool pmic_chrdet_status(void);
 #endif
 /*BCCT input current control function over switch charger*/
 extern unsigned int set_chr_input_current_limit(int current_limit);
-#endif				/* #ifndef _CHARGING_H */
+
+/* Set charger's boost current limit */
+extern int set_chr_boost_current_limit(unsigned int current_limit);
+
+/* Enable/Disable OTG mode */
+extern int set_chr_enable_otg(unsigned int enable);
+
+extern int mtk_chr_get_tchr(int *min_tchr, int *max_tchr);
+extern int mtk_chr_get_soc(unsigned int *soc);
+extern int mtk_chr_get_ui_soc(unsigned int *soc);
+extern int mtk_chr_get_vbat(unsigned int *vbat);
+extern int mtk_chr_get_ibat(unsigned int *ibat);
+extern int mtk_chr_get_vbus(unsigned int *vbus);
+extern int mtk_chr_get_aicr(unsigned int *aicr);
+extern int mtk_chr_is_charger_exist(unsigned char *exist);
+extern int mtk_chr_enable_power_path(unsigned char en);
+extern int mtk_chr_enable_charge(unsigned char charging_enable);
+extern int mtk_chr_reset_aicr_upper_bound(void);
+extern int mtk_chr_enable_chr_type_det(unsigned char en);
+extern int mtk_chr_pd_enable_power_path(unsigned char enable);
+extern int mtk_chr_enable_discharge(bool enable);
+extern int mtk_chr_enable_hv_charging(bool en);
+extern bool mtk_chr_is_hv_charging_enable(void);
+extern int mtk_chr_enable_kpoc_shutdown(bool en);
+extern bool mtk_chr_is_kpoc_shutdown_enable(void);
+
+#endif	/* #ifndef _CHARGING_H */

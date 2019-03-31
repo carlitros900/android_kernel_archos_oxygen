@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef _BATTERY_METER_H
 #define _BATTERY_METER_H
 
@@ -108,7 +121,6 @@ struct battery_meter_custom_data {
 	int r_fg_board_base;
 	int r_fg_board_slope;
 	int car_tune_value;
-	int system_off_voltage;/*start-160325-xmyyq-add system_off_voltage in battery_meter_custom_data*/
 
 	/* HW Fuel gague  */
 	int current_detect_r_fg;
@@ -192,6 +204,8 @@ struct battery_meter_custom_data {
 	int difference_hwocv_rtc;
 	int difference_hwocv_swocv;
 	int difference_swocv_rtc;
+	int difference_vbat_rtc;
+	int difference_swocv_rtc_pos;
 	int max_swocv;
 
 	int max_hwocv;
@@ -225,11 +239,18 @@ struct battery_meter_custom_data {
 	int shutdown_gauge1_xmins;
 	int shutdown_gauge1_mins;
 
+	int tracking_gap;
+	int trackingoffset;
+	int trackingen;
+
 	int min_charging_smooth_time;
+
+	int embedded_battery;
 
 	/* SW Fuel gauge */
 	int apsleep_battery_voltage_compensate;
 
+	int bat_task_period;
 
 };
 
@@ -300,6 +321,10 @@ typedef enum {
 	FG_DAEMON_CMD_GET_SUSPEND_TIME,
 	FG_DAEMON_CMD_GET_SUSPEND_CAR,
 	FG_DAEMON_CMD_IS_HW_OCV_UPDATE,
+	FG_DAEMON_CMD_SET_SWSOC,
+	FG_DAEMON_CMD_SET_HWSOC,
+	FG_DAEMON_CMD_SET_VBATSOC,
+	FG_DAEMON_CMD_SET_CAR_TUNE_VALUE,
 
 	FG_DAEMON_CMD_FROM_USER_NUMBER
 } FG_DAEMON_CTRL_CMD_FROM_USER;
@@ -361,8 +386,11 @@ extern signed int battery_meter_get_battery_nPercent_UI_SOC(void);	/* tracking p
 
 extern signed int battery_meter_get_tempR(signed int dwVolt);
 extern signed int battery_meter_get_tempV(void);
+extern signed int battery_meter_get_QMAX25(void);
 extern signed int battery_meter_get_VSense(void);/* isense voltage */
+extern void battery_meter_smooth_uisoc2(void);
 extern int wakeup_fg_algo(int flow_state);
+extern int dod_init_in_kernel(void);
 
 #if defined(CUST_CAPACITY_OCV2CV_TRANSFORM)
 extern void battery_meter_set_reset_soc(kal_bool bUSE_UI_SOC);
@@ -385,6 +413,8 @@ extern void fgauge_algo_run_get_init_data(void);
 extern void battery_meter_set_init_flag(kal_bool flag);
 extern void battery_meter_reset_sleep_time(void);
 extern int battery_meter_get_low_battery_interrupt_status(void);
+extern signed int battery_meter_meta_tool_cali_car_tune(int);
+extern void mt_battery_set_init_vol(int);
 
 #if defined(CONFIG_MTK_HAFG_20)
 unsigned int get_cv_voltage(void);

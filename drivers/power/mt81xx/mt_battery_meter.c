@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #include <linux/init.h>		/* For init/exit macros */
 #include <linux/module.h>	/* For MODULE_ marcros  */
 #include <linux/fs.h>
@@ -32,14 +45,8 @@
 static DEFINE_MUTEX(FGADC_mutex);
 static DEFINE_MUTEX(qmax_mutex);
 
-#define CUST_CAPACITY_OCV2CV_TRANSFORM
-
-
-#ifdef CUST_CAPACITY_OCV2CV_TRANSFORM
-#define STEP_OF_QMAX 54		/* 54 mAh */
-#define CV_CURRENT 6000		/* 600mA */
 static s32 g_currentfactor = 100;
-#endif
+
 
 #define BM_LOG_ERROR 0
 #define BM_LOG_CRTI 1
@@ -298,9 +305,25 @@ s32 fgauge_get_Q_max(s16 temperature)
 		if (temperature < low_temperature)
 			temperature = low_temperature;
 
+	} else if (p_bat_meter_data->p_battery_profile_t1_5 &&
+			temperature <= p_bat_meter_data->temperature_t1_5) {
+			low_temperature = p_bat_meter_data->tempearture_t1;
+			low_Q_max = p_bat_meter_data->q_max_pos_0;
+			high_temperature = p_bat_meter_data->temperature_t1_5;
+			high_Q_max = p_bat_meter_data->q_max_pos_10;
+
+			if (temperature < low_temperature)
+				temperature = low_temperature;
+
 	} else if (temperature <= p_bat_meter_data->temperature_t2) {
-		low_temperature = p_bat_meter_data->tempearture_t1;
-		low_Q_max = p_bat_meter_data->q_max_pos_0;
+
+		if (p_bat_meter_data->p_battery_profile_t1_5) {
+			low_temperature = p_bat_meter_data->temperature_t1_5;
+			low_Q_max = p_bat_meter_data->q_max_pos_10;
+		} else {
+			low_temperature = p_bat_meter_data->tempearture_t1;
+			low_Q_max = p_bat_meter_data->q_max_pos_0;
+		}
 		high_temperature = p_bat_meter_data->temperature_t2;
 		high_Q_max = p_bat_meter_data->q_max_pos_25;
 
@@ -343,9 +366,25 @@ s32 fgauge_get_Q_max_high_current(s16 temperature)
 		if (temperature < low_temperature)
 			temperature = low_temperature;
 
-	} else if (temperature <= p_bat_meter_data->temperature_t2) {
+	} else if (p_bat_meter_data->p_battery_profile_t1_5 &&
+		temperature <= p_bat_meter_data->temperature_t1_5) {
 		low_temperature = p_bat_meter_data->tempearture_t1;
 		low_Q_max = p_bat_meter_data->q_max_pos_0_h_current;
+		high_temperature = p_bat_meter_data->temperature_t1_5;
+		high_Q_max = p_bat_meter_data->q_max_pos_10_h_current;
+
+		if (temperature < low_temperature)
+			temperature = low_temperature;
+
+	} else if (temperature <= p_bat_meter_data->temperature_t2) {
+
+		if (p_bat_meter_data->p_battery_profile_t1_5) {
+			low_temperature = p_bat_meter_data->temperature_t1_5;
+			low_Q_max = p_bat_meter_data->q_max_pos_10_h_current;
+		} else {
+			low_temperature = p_bat_meter_data->tempearture_t1;
+			low_Q_max = p_bat_meter_data->q_max_pos_0_h_current;
+		}
 		high_temperature = p_bat_meter_data->temperature_t2;
 		high_Q_max = p_bat_meter_data->q_max_pos_25_h_current;
 
@@ -525,6 +564,8 @@ struct BATTERY_PROFILE_STRUCT *fgauge_get_profile(u32 temperature)
 		return p_bat_meter_data->p_battery_profile_t0;
 	else if (temperature == p_bat_meter_data->tempearture_t1)
 		return p_bat_meter_data->p_battery_profile_t1;
+	else if (temperature == p_bat_meter_data->temperature_t1_5)
+		return p_bat_meter_data->p_battery_profile_t1_5;
 	else if (temperature == p_bat_meter_data->temperature_t2)
 		return p_bat_meter_data->p_battery_profile_t2;
 	else if (temperature == p_bat_meter_data->temperature_t3)
@@ -541,6 +582,8 @@ struct R_PROFILE_STRUCT *fgauge_get_profile_r_table(u32 temperature)
 		return p_bat_meter_data->p_r_profile_t0;
 	else if (temperature == p_bat_meter_data->tempearture_t1)
 		return p_bat_meter_data->p_r_profile_t1;
+	else if (temperature == p_bat_meter_data->temperature_t1_5)
+		return p_bat_meter_data->p_r_profile_t1_5;
 	else if (temperature == p_bat_meter_data->temperature_t2)
 		return p_bat_meter_data->p_r_profile_t2;
 	else if (temperature == p_bat_meter_data->temperature_t3)
@@ -716,8 +759,8 @@ s32 fgauge_read_r_bat_by_v(s32 voltage)
 
 	profile_p = fgauge_get_profile_r_table(p_bat_meter_data->temperature_t);
 	if (profile_p == NULL) {
-		bm_print(BM_LOG_CRTI, "[FGADC] fgauge get R-Table profile : fail !\r\n");
-		return (profile_p + 0)->resistance;
+		bm_print(BM_LOG_ERROR, "[FGADC] fgauge get R-Table profile : fail !\r\n");
+		return 0;
 	}
 
 	saddles = fgauge_get_saddles_r_table();
@@ -763,10 +806,27 @@ void fgauge_construct_battery_profile(s32 temperature,
 		if (temperature < low_temperature)
 			temperature = low_temperature;
 
-	} else if (temperature <= p_bat_meter_data->temperature_t2) {
+	} else if (p_bat_meter_data->p_battery_profile_t1_5 &&
+		temperature <= p_bat_meter_data->temperature_t1_5) {
 		low_profile_p = fgauge_get_profile(p_bat_meter_data->tempearture_t1);
-		high_profile_p = fgauge_get_profile(p_bat_meter_data->temperature_t2);
+		high_profile_p = fgauge_get_profile(p_bat_meter_data->temperature_t1_5);
 		low_temperature = p_bat_meter_data->tempearture_t1;
+		high_temperature = p_bat_meter_data->temperature_t1_5;
+
+		if (temperature < low_temperature)
+			temperature = low_temperature;
+
+	} else if (temperature <= p_bat_meter_data->temperature_t2) {
+
+		if (p_bat_meter_data->p_battery_profile_t1_5) {
+			low_profile_p = fgauge_get_profile(p_bat_meter_data->temperature_t1_5);
+			low_temperature = p_bat_meter_data->temperature_t1_5;
+		} else {
+			low_profile_p = fgauge_get_profile(p_bat_meter_data->tempearture_t1);
+			low_temperature = p_bat_meter_data->tempearture_t1;
+		}
+
+		high_profile_p = fgauge_get_profile(p_bat_meter_data->temperature_t2);
 		high_temperature = p_bat_meter_data->temperature_t2;
 
 		if (temperature < low_temperature)
@@ -839,10 +899,27 @@ void fgauge_construct_r_table_profile(s32 temperature, struct R_PROFILE_STRUCT *
 		if (temperature < low_temperature)
 			temperature = low_temperature;
 
-	} else if (temperature <= p_bat_meter_data->temperature_t2) {
+	} else if (p_bat_meter_data->p_battery_profile_t1_5 &&
+		temperature <= p_bat_meter_data->temperature_t1_5) {
 		low_profile_p = fgauge_get_profile_r_table(p_bat_meter_data->tempearture_t1);
-		high_profile_p = fgauge_get_profile_r_table(p_bat_meter_data->temperature_t2);
+		high_profile_p = fgauge_get_profile_r_table(p_bat_meter_data->temperature_t1_5);
 		low_temperature = p_bat_meter_data->tempearture_t1;
+		high_temperature = p_bat_meter_data->temperature_t1_5;
+
+		if (temperature < low_temperature)
+			temperature = low_temperature;
+
+	} else if (temperature <= p_bat_meter_data->temperature_t2) {
+
+		if (p_bat_meter_data->p_battery_profile_t1_5) {
+			low_profile_p = fgauge_get_profile_r_table(p_bat_meter_data->temperature_t1_5);
+			low_temperature = p_bat_meter_data->temperature_t1_5;
+		} else {
+			low_profile_p = fgauge_get_profile_r_table(p_bat_meter_data->tempearture_t1);
+			low_temperature = p_bat_meter_data->tempearture_t1;
+		}
+
+		high_profile_p = fgauge_get_profile_r_table(p_bat_meter_data->temperature_t2);
 		high_temperature = p_bat_meter_data->temperature_t2;
 
 		if (temperature < low_temperature)
@@ -1080,7 +1157,6 @@ void fgauge_construct_table_by_temp(void)
 #endif
 }
 
-#ifdef CUST_CAPACITY_OCV2CV_TRANSFORM
 /*
 	ZCV table is created by 600mA loading.
 	Here we calculate average current and get a factor based on 600mA.
@@ -1119,7 +1195,7 @@ void fgauge_get_current_factor(void)
 	battCurrentBuffer[tempcurrentIndex] = inst_current;
 	avg_current = (current_sum) / TEMP_AVERAGE_SIZE;
 
-	g_currentfactor = avg_current * 100 / CV_CURRENT;	/* calculate factor by 600ma */
+	g_currentfactor = avg_current * 100 / p_bat_meter_data->cv_current;	/* calculate factor by 600ma */
 
 	bm_print(BM_LOG_CRTI, "[fgauge_get_current_factor] %d,%d,%d,%d\r\n",
 		 inst_current, avg_current, g_currentfactor, gFG_Is_Charging);
@@ -1169,9 +1245,9 @@ s32 fgauge_get_Q_max_high_current_by_current(s32 i_current, s16 val_temp)
 
 		if (OCV_temp - V_drop < threshold) {
 			if (iIndex <= 1)
-				ret_Q_max = STEP_OF_QMAX;
+				ret_Q_max = p_bat_meter_data->step_of_qmax;
 			else
-				ret_Q_max = (iIndex - 1) * STEP_OF_QMAX;
+				ret_Q_max = (iIndex - 1) * p_bat_meter_data->step_of_qmax;
 			break;
 		}
 	}
@@ -1181,9 +1257,6 @@ s32 fgauge_get_Q_max_high_current_by_current(s32 i_current, s16 val_temp)
 
 	return ret_Q_max;
 }
-
-#endif
-
 
 void fg_qmax_update_for_aging(void)
 {
@@ -1416,8 +1489,9 @@ s32 fgauge_get_dod0(s32 voltage, s32 temperature, bool bOcv)
 	/* Re-constructure r-table profile according to current temperature */
 	profile_p_r_table = fgauge_get_profile_r_table(p_bat_meter_data->temperature_t);
 	if (profile_p_r_table == NULL) {
-		bm_print(BM_LOG_CRTI,
+		bm_print(BM_LOG_ERROR,
 			 "[FGADC] fgauge_get_profile_r_table : create table fail !\r\n");
+		return 0;
 	}
 	fgauge_construct_r_table_profile(temperature, profile_p_r_table);
 
@@ -1601,9 +1675,8 @@ void fgauge_algo_run(void)
 	gFG_voltage = gFG_voltage + fgauge_compensate_battery_voltage_recursion(gFG_voltage, 5);	/* mV */
 	gFG_voltage = gFG_voltage + p_bat_meter_data->ocv_board_compesate;
 
-#ifdef CUST_CAPACITY_OCV2CV_TRANSFORM
-	fgauge_get_current_factor();
-#endif
+	if (p_bat_meter_data->enable_ocv2cv_trans)
+		fgauge_get_current_factor();
 
 	ret = battery_meter_ctrl(BATTERY_METER_CMD_GET_HW_FG_CAR, &gFG_columb);
 
@@ -2126,6 +2199,14 @@ s32 battery_meter_get_charger_voltage(void)
 	return val;
 }
 
+bool battery_meter_ocv2cv_trans_support(void)
+{
+	if (p_bat_meter_data)
+		return p_bat_meter_data->enable_ocv2cv_trans ? true : false;
+	else
+		return false;
+}
+
 s32 battery_meter_get_battery_soc(void)
 {
 #if defined(CONFIG_SOC_BY_HW_FG)
@@ -2135,7 +2216,6 @@ s32 battery_meter_get_battery_soc(void)
 #endif
 }
 
-#ifdef CUST_CAPACITY_OCV2CV_TRANSFORM
 /* Here we compensate D1 by a factor from Qmax with loading. */
 s32 battery_meter_trans_battery_percentage(s32 d_val)
 {
@@ -2151,7 +2231,7 @@ s32 battery_meter_trans_battery_percentage(s32 d_val)
 	C_0mA = fgauge_get_Q_max(temp_val);
 
 	/* discharging and current > 600ma */
-	i_avg_current = g_currentfactor * CV_CURRENT / 100;
+	i_avg_current = g_currentfactor * (p_bat_meter_data->cv_current / 100);
 	if (false == gFG_Is_Charging && g_currentfactor > 100) {
 		C_600mA = fgauge_get_Q_max_high_current(temp_val);
 		C_current = fgauge_get_Q_max_high_current_by_current(i_avg_current, temp_val);
@@ -2171,7 +2251,6 @@ s32 battery_meter_trans_battery_percentage(s32 d_val)
 
 	return d_val;
 }
-#endif
 
 s32 battery_meter_get_battery_percentage(void)
 {
@@ -2186,13 +2265,12 @@ s32 battery_meter_get_battery_percentage(void)
 
 	fgauge_algo_run();
 
-#ifdef CUST_CAPACITY_OCV2CV_TRANSFORM
 	/* We keep gFG_capacity_by_c as capacity before compensation */
 	/* Compensated capacity is returned for UI SOC tracking */
-	return 100 - battery_meter_trans_battery_percentage(100 - gFG_capacity_by_c);
-#else
-	return gFG_capacity_by_c;
-#endif
+	if (p_bat_meter_data->enable_ocv2cv_trans)
+		return 100 - battery_meter_trans_battery_percentage(100 - gFG_capacity_by_c);
+	else
+		return gFG_capacity_by_c;
 #endif
 #endif
 }
@@ -2214,6 +2292,15 @@ s32 battery_meter_initial(void)
 
 	return 0;
 #endif
+}
+
+s32 battery_meter_reset_aging(void)
+{
+#if defined(CONFIG_MTK_ENABLE_AGING_ALGORITHM) && !defined(CONFIG_POWER_EXT)
+	aging_ocv_1 = 0;
+	aging_ocv_2 = 0;
+#endif
+	return 0;
 }
 
 void reset_parameter_car(void)
@@ -2266,13 +2353,13 @@ s32 battery_meter_reset(bool bUI_SOC)
 #else
 	u32 ui_percentage = bat_get_ui_percentage();
 
-#ifdef CUST_CAPACITY_OCV2CV_TRANSFORM
-	if (false == bUI_SOC) {
-		ui_percentage = battery_meter_get_battery_soc();
-		bm_print(BM_LOG_FULL, "[CUST_CAPACITY_OCV2CV_TRANSFORM]Use Battery SOC: %d\n",
-			 ui_percentage);
+	if (p_bat_meter_data->enable_ocv2cv_trans) {
+		if (false == bUI_SOC) {
+			ui_percentage = battery_meter_get_battery_soc();
+				bm_print(BM_LOG_FULL, "[battery_meter_reset] use meter soc: %d\n",
+				 ui_percentage);
+		}
 	}
-#endif
 
 #if defined(CONFIG_QMAX_UPDATE_BY_CHARGED_CAPACITY)
 	if (bat_is_charging_full() == true) {	/* charge full */
@@ -3015,9 +3102,6 @@ static void init_meter_global_data(struct platform_device *dev)
 static int battery_meter_probe(struct platform_device *dev)
 {
 	int ret_device_file = 0;
-#if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)
-	char *temp_strptr;
-#endif
 
 	p_bat_meter_data = (struct mt_battery_meter_custom_data *)dev->dev.platform_data;
 
@@ -3031,18 +3115,6 @@ static int battery_meter_probe(struct platform_device *dev)
 	init_meter_global_data(dev);
 
 	bm_print(BM_LOG_CRTI, "[battery_meter_probe] probe\n");
-
-#if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)
-	if (get_boot_mode() == LOW_POWER_OFF_CHARGING_BOOT
-	    || get_boot_mode() == KERNEL_POWER_OFF_CHARGING_BOOT) {
-		temp_strptr =
-		    kzalloc(strlen(saved_command_line) + strlen(" androidboot.mode=charger") + 1,
-			    GFP_KERNEL);
-		strcpy(temp_strptr, saved_command_line);
-		strcat(temp_strptr, " androidboot.mode=charger");
-		saved_command_line = temp_strptr;
-	}
-#endif
 
 	/* select battery meter control method */
 	battery_meter_ctrl = bm_ctrl_cmd;
@@ -3304,6 +3376,40 @@ static struct platform_driver battery_meter_driver = {
 #endif
 		   },
 };
+
+#if defined(CONFIG_MTK_KERNEL_POWER_OFF_CHARGING)
+static int update_kpoc_boot_mode(void)
+{
+	struct device_node *np;
+	struct property *prop;
+	static const char prop_name[] = "mode";
+	static const char prop_value[] = "charger";
+
+	if (get_boot_mode() == LOW_POWER_OFF_CHARGING_BOOT ||
+			get_boot_mode() == KERNEL_POWER_OFF_CHARGING_BOOT) {
+
+		np = of_find_node_by_path("/firmware/android");
+
+		if (!np) {
+			pr_err("%s: can't find dts path!\n", __func__);
+			return 0;
+		}
+
+		prop = kzalloc(sizeof(*prop), GFP_KERNEL);
+		if (!prop)
+			return 0;
+
+		prop->name = (char *)prop_name;
+		prop->value = (void *)prop_value;
+		prop->length = strlen(prop->value);
+		of_update_property(np, prop);
+	}
+
+	return 0;
+}
+
+late_initcall(update_kpoc_boot_mode);
+#endif
 
 static int __init battery_meter_init(void)
 {

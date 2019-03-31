@@ -398,15 +398,11 @@ config BATTERY_GOLDFISH
 	  Goldfish emulator.
 
 config BATTERY_THERMAL_CHECK_POWER_ON
-	bool "Thermal temperature check when power on"
-	help
-		Say Y to enable thermal temperature check when power on.
+        bool "Thermal temperature check when power on"
+        help
+                Say Y to enable thermal temperature check when power on.
 
 source "drivers/power/reset/Kconfig"
-
-endif # POWER_SUPPLY
-
-source "drivers/power/avs/Kconfig"
 
 if !ARCH_MT8173
 source "drivers/power/mediatek/Kconfig"
@@ -415,3 +411,6 @@ endif
 if ARCH_MT8173
 source "drivers/power/mt81xx/Kconfig"
 endif
+endif # POWER_SUPPLY
+
+source "drivers/power/avs/Kconfig"

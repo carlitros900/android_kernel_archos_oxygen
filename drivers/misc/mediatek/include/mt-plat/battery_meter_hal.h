@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef _BATTERY_METER_HAL_H
 #define _BATTERY_METER_HAL_H
 
@@ -5,8 +18,8 @@
 /* ============================================================ */
 /* define */
 /* ============================================================ */
-#define BM_LOG_CRTI 7
-#define BM_LOG_FULL 8
+#define BM_LOG_CRTI (7)
+#define BM_LOG_FULL (8)
 
 #define bm_print(num, fmt, args...)   \
 do {									\
@@ -95,6 +108,9 @@ typedef enum {
 	BATTERY_METER_CMD_SET_LOW_BAT_INTERRUPT,
 	BATTERY_METER_CMD_GET_LOW_BAT_INTERRUPT_STATUS,
 	BATTERY_METER_CMD_GET_REFRESH_HW_OCV,
+	BATTERY_METER_CMD_SET_META_CALI_CURRENT,
+	BATTERY_METER_CMD_META_CALI_CAR_TUNE_VALUE,
+	BATTERY_METER_CMD_GET_IS_HW_OCV_READY,
 
 	BATTERY_METER_CMD_NUMBER
 } BATTERY_METER_CTRL_CMD;
@@ -126,6 +142,5 @@ extern int Enable_FGADC_LOG;
 /* External function */
 /* ============================================================ */
 extern signed int bm_ctrl_cmd(BATTERY_METER_CTRL_CMD cmd, void *data);
-
 
 #endif				/* #ifndef _BATTERY_METER_HAL_H */

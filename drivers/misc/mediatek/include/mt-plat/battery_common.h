@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef BATTERY_COMMON_H
 #define BATTERY_COMMON_H
 
@@ -8,7 +21,11 @@
  *  BATTERY VOLTAGE
  ****************************************************************************/
 #define PRE_CHARGE_VOLTAGE                  (3200)
+#if defined(SOC_BY_EXT_HW_FG)
+#define SYSTEM_OFF_VOLTAGE                  (3450)
+#else
 #define SYSTEM_OFF_VOLTAGE                  (3400)
+#endif
 #define CONSTANT_CURRENT_CHARGE_VOLTAGE     (4100)
 #define CONSTANT_VOLTAGE_CHARGE_VOLTAGE     (4200)
 #define CV_DROPDOWN_VOLTAGE                 (4000)
@@ -34,7 +51,11 @@
 
 
 #define MUTEX_TIMEOUT                       (5000)
-#define BAT_TASK_PERIOD                     (10)/* 10sec */
+#ifdef BAT_TASK_PERIOD_SECOND
+	#define BAT_TASK_PERIOD                     (BAT_TASK_PERIOD_SECOND)
+#else
+	#define BAT_TASK_PERIOD                     (10)
+#endif
 #define g_free_bat_temp					(100)0	/* 1 s */
 
 /*****************************************************************************
@@ -187,6 +208,7 @@ typedef struct {
 	signed int charger_protect_status;
 	signed int ICharging;
 	signed int IBattery;
+	signed int CURRENT_NOW;
 	signed int temperature;
 	signed int temperatureR;
 	signed int temperatureV;
@@ -230,13 +252,13 @@ struct battery_custom_data {
 	int usb_charger_current_suspend;
 	int usb_charger_current_unconfigured;
 	int usb_charger_current_configured;
-	int usb_charger_charger_current;/*start-160325-xmyyq-add some charger type charger current node*/
+	int usb_charger_charger_current;/*start-20161202-xmyyq-add some charger type charger current node*/
 	int usb_charger_current;
 	int ac_charger_input_current;
 	int ac_charger_current;
-	int non_std_ac_charger_charger_current;/*start-160325-xmyyq-add some charger type charger current node*/
+	int non_std_ac_charger_charger_current;/*start-20161202-xmyyq-add some charger type charger current node*/
 	int non_std_ac_charger_current;
-	int charging_host_charger_charger_current;/*start-160325-xmyyq-add some charger type charger current node*/
+	int charging_host_charger_charger_current;/*start-20161202-xmyyq-add some charger type charger current node*/
 	int charging_host_charger_current;
 	int apple_0_5a_charger_current;
 	int apple_1_0a_charger_current;
@@ -258,7 +280,6 @@ struct battery_custom_data {
 	int npercent_tracking_time;
 	int sync_to_real_tracking_time;
 	int v_0percent_tracking;
-	int system_off_voltage;/*start-160325-xmyyq-add system_off_voltage in battery_custom_data*/
 
 	/* Battery Notify
 	   int battery_notify_case_0001_vcharger;
@@ -315,12 +336,13 @@ extern kal_bool g_ftm_battery_flag;
 extern int charging_level_data[1];
 extern kal_bool g_call_state;
 extern kal_bool g_charging_full_reset_bat_meter;
-#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT) || defined(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)
+#if defined(CONFIG_MTK_PUMP_EXPRESS_SUPPORT)
 extern kal_bool ta_check_chr_type;
 extern kal_bool ta_cable_out_occur;
 extern kal_bool is_ta_connect;
 extern struct wake_lock TA_charger_suspend_lock;
 #endif
+extern bool gDisableGM;
 
 /*****************************************************************************
  *  Extern Function
@@ -336,11 +358,9 @@ extern void do_chrdet_int_task(void);
 extern void set_usb_current_unlimited(bool enable);
 extern bool get_usb_current_unlimited(void);
 extern CHARGER_TYPE mt_get_charger_type(void);
-#if defined(CONFIG_MTK_USBFSH)
 #if defined(CONFIG_USB_MTK_CHARGER_DETECT)
 extern CHARGER_TYPE usb_charger_type_detect(void);
 extern bool mt_get_usb11_port_status(void);
-#endif
 #endif
 
 #if defined(CONFIG_MTK_HAFG_20)
@@ -377,7 +397,7 @@ extern PMU_STATUS do_jeita_state_machine(void);
 #ifdef CONFIG_MTK_POWER_EXT_DETECT
 extern kal_bool bat_is_ext_power(void);
 #endif
-
+extern signed int gFG_capacity_by_c;
 extern int g_platform_boot_mode;
 extern bool mt_usb_is_device(void);
 #if defined(CONFIG_USB_MTK_HDRC) || defined(CONFIG_USB_MU3D_DRV)
@@ -391,11 +411,12 @@ void check_battery_exist(void);
 #ifdef DLPT_POWER_OFF_EN
 	extern int dlpt_check_power_off(void);
 #endif
-#ifdef BATTERY_CDP_WORKAROUND
+
 extern kal_bool is_usb_rdy(void);
-#endif
+
 extern unsigned int upmu_get_reg_value(unsigned int reg);
 
+extern void mt_charger_enable_DP_voltage(int ison);
 
 /* usb header */
 extern bool mt_usb_is_device(void);

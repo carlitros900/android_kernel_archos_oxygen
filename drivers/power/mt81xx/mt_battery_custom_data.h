@@ -1,3 +1,16 @@
+/*
+ * Copyright (C) 2015 MediaTek Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ */
+
 #ifndef _BATTERY_CUSTOM_DATA_H
 #define _BATTERY_CUSTOM_DATA_H
 
@@ -39,6 +52,7 @@ struct mt_battery_meter_custom_data {
 
 	int temperature_t0;
 	int tempearture_t1;
+	int temperature_t1_5;
 	int temperature_t2;
 	int temperature_t3;
 	int temperature_t;
@@ -47,11 +61,13 @@ struct mt_battery_meter_custom_data {
 
 	int q_max_pos_50;
 	int q_max_pos_25;
+	int q_max_pos_10;
 	int q_max_pos_0;
 	int q_max_neg_10;
 
 	int q_max_pos_50_h_current;
 	int q_max_pos_25_h_current;
+	int q_max_pos_10_h_current;
 	int q_max_pos_0_h_current;
 	int q_max_neg_10_h_current;
 
@@ -86,6 +102,11 @@ struct mt_battery_meter_custom_data {
 	int low_power_wakeup_period;
 	int close_poweroff_wakeup_period;
 
+	/* ocv2cv transform */
+	int enable_ocv2cv_trans;
+	int step_of_qmax; /*mAh*/
+	int cv_current; /*0.1mA*/
+
 	/* meter table */
 	int rbat_pull_up_r;
 	int rbat_pull_down_r;
@@ -98,10 +119,12 @@ struct mt_battery_meter_custom_data {
 	void *p_batt_temperature_table;
 	void *p_battery_profile_t0;
 	void *p_battery_profile_t1;
+	void *p_battery_profile_t1_5;
 	void *p_battery_profile_t2;
 	void *p_battery_profile_t3;
 	void *p_r_profile_t0;
 	void *p_r_profile_t1;
+	void *p_r_profile_t1_5;
 	void *p_r_profile_t2;
 	void *p_r_profile_t3;
 	void *p_battery_profile_temperature;
@@ -134,6 +157,7 @@ struct mt_battery_charging_custom_data {
 
 	int usb_charger_current;
 	int ac_charger_current;
+	int ac_charger_input_current;
 	int non_std_ac_charger_current;
 	int charging_host_charger_current;
 	int apple_0_5a_charger_current;
@@ -150,6 +174,9 @@ struct mt_battery_charging_custom_data {
 	int onehundred_percent_tracking_time;
 	int npercent_tracking_time;
 	int sync_to_real_tracking_time;
+
+	/* Battery voltage */
+	int battery_cv_voltage;
 
 	/* JEITA parameter */
 	int cust_soc_jeita_sync_time;
