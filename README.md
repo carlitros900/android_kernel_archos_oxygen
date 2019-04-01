@@ -6,7 +6,7 @@ Linux Kernel source code for the devices:
 
 Maybe compatible with ARCHOS oxygen 70 / 80
 
-Also branded as BUSH Spira B3 10
+Also branded as BUSH Spira B3 10 (or B2 10)
 
 
 BUILD INSTRUCTIONS?
