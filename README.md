@@ -6,6 +6,8 @@ Linux Kernel source code for the devices:
 
 Maybe compatible with ARCHOS oxygen 70 / 80
 
+Also branded as BUSH Spira B3 10
+
 
 BUILD INSTRUCTIONS?
 ===================
@@ -17,9 +19,9 @@ clone the project:
 
 After it, choose the version you would like to build:
 
-* Aquaris M10 FHD *
+* Archos 101b Oxygen Ultra *
 
-        $ mv aquaris-M10-FHD kernel
+        $ mv android_kernel_archos_oxygen kernel
         $ cd kernel
         $ git checkout feature/merger-freezerfhd
 
