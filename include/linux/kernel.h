@@ -579,6 +579,7 @@ do {									\
  * let gcc optimize the rest.
  */
 
+#if defined(DEBUG)
 #define trace_printk(fmt, ...)				\
 do {							\
 	char _______STR[] = __stringify((__VA_ARGS__));	\
@@ -587,7 +588,11 @@ do {							\
 	else						\
 		trace_puts(fmt);			\
 } while (0)
+#else
+#define trace_printk(fmt, ...)
+#endif
 
+#if defined(DEBUG)
 #define do_trace_printk(fmt, args...)					\
 do {									\
 	static const char *trace_printk_fmt __used			\
@@ -601,6 +606,9 @@ do {									\
 	else								\
 		__trace_printk(_THIS_IP_, fmt, ##args);			\
 } while (0)
+#else
+#define do_trace_printk(fmt, args...)
+#endif
 
 extern __printf(2, 3)
 int __trace_bprintk(unsigned long ip, const char *fmt, ...);
@@ -633,6 +641,7 @@ int __trace_printk(unsigned long ip, const char *fmt, ...);
  *  (1 when __trace_bputs is used, strlen(str) when __trace_puts is used)
  */
 
+#if defined(DEBUG)
 #define trace_puts(str) ({						\
 	static const char *trace_printk_fmt __used			\
 		__attribute__((section("__trace_printk_fmt"))) =	\
@@ -643,6 +652,9 @@ int __trace_printk(unsigned long ip, const char *fmt, ...);
 	else								\
 		__trace_puts(_THIS_IP_, str, strlen(str));		\
 })
+#else
+#define trace_puts(str)
+#endif
 extern int __trace_bputs(unsigned long ip, const char *str);
 extern int __trace_puts(unsigned long ip, const char *str, int size);
 
@@ -653,6 +665,7 @@ extern void trace_dump_stack(int skip);
  * if we try to allocate the static variable to fmt if it is not a
  * constant. Even with the outer if statement.
  */
+#if defined(DEBUG)
 #define ftrace_vprintk(fmt, vargs)					\
 do {									\
 	if (__builtin_constant_p(fmt)) {				\
@@ -664,6 +677,9 @@ do {									\
 	} else								\
 		__ftrace_vprintk(_THIS_IP_, fmt, vargs);		\
 } while (0)
+#else
+#define ftrace_vprintk(fmt, vargs)
+#endif
 
 extern int
 __ftrace_vbprintk(unsigned long ip, const char *fmt, va_list ap);
