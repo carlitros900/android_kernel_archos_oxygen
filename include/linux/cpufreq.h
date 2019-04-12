@@ -318,14 +318,9 @@ int cpufreq_unregister_driver(struct cpufreq_driver *driver_data);
 const char *cpufreq_get_current_driver(void);
 void *cpufreq_get_driver_data(void);
 
-<<<<<<< HEAD
-=======
 void cpufreq_notify_utilization(struct cpufreq_policy *policy,
 		unsigned int load);
 
-void cpufreq_notify_utilization(struct cpufreq_policy *policy, unsigned int load);
-
->>>>>>> 3dc411822e... Add Darkness Governor with Optimizations
 static inline void cpufreq_verify_within_limits(struct cpufreq_policy *policy,
 		unsigned int min, unsigned int max)
 {
@@ -496,20 +491,12 @@ extern struct cpufreq_governor cpufreq_gov_conservative;
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_INTERACTIVE)
 extern struct cpufreq_governor cpufreq_gov_interactive;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_interactive)
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_ALUCARD)
 extern struct cpufreq_governor cpufreq_gov_alucard;
 #define CPUFREQ_DEFAULT_GOVERNOR  (&cpufreq_gov_alucard)
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_DARKNESS)
 extern struct cpufreq_governor cpufreq_gov_darkness;
 #define CPUFREQ_DEFAULT_GOVERNOR (&cpufreq_gov_darkness)
->>>>>>> 3dc411822e... Add Darkness Governor with Optimizations
-=======
-extern struct cpufreq_governor cpufreq_gov_alucard;
-#define CPUFREQ_DEFAULT_GOVERNOR  (&cpufreq_gov_alucard)
->>>>>>> 55105c02f8... cpufreq: alucard: bring up
 #endif
 
 /*********************************************************************
