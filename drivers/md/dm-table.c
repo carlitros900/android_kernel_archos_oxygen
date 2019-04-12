@@ -1438,7 +1438,7 @@ static bool dm_table_supports_discards(struct dm_table *t)
 void dm_table_set_restrictions(struct dm_table *t, struct request_queue *q,
 			       struct queue_limits *limits)
 {
-	unsigned flush = 0;
+	//unsigned flush = 0;
     bool wc = false, fua = false;
 	/*
 	 * Copy table's limits to the DM device's request_queue
