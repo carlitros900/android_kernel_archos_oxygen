@@ -297,7 +297,7 @@ SYSCALL_DEFINE4(sync_file_range, int, fd, loff_t, offset, loff_t, nbytes,
 	loff_t endbyte;			/* inclusive */
 	umode_t i_mode;
  
- c	if (!fsync_enabled)
+	if (!fsync_enabled)
  		return 0;
  
 	ret = -EINVAL;
