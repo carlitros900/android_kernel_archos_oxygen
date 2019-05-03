@@ -112,6 +112,11 @@ config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
 	  loading your cpufreq low-level hardware driver, using the
 	  'interactive' governor for latency-sensitive workloads.
 
+config CPU_FREQ_DEFAULT_GOV_THUNDERX
+  bool "thunderx"
+  select CPU_FREQ_GOV_THUNDERX
+  help
+
 config CPU_FREQ_DEFAULT_GOV_DARKNESS
 	bool "darkness"
 	select CPU_FREQ_GOV_DARKNESS
@@ -121,6 +126,11 @@ config CPU_FREQ_DEFAULT_GOV_ALUCARD
 	bool "alucard"
 	select CPU_FREQ_GOV_ALUCARD
 	help
+
+config CPU_FREQ_DEFAULT_GOV_POISON
+  bool "Poison"
+  select CPU_FREQ_GOV_POISON
+  help
 
 endchoice
 
@@ -241,8 +251,22 @@ config CPU_FREQ_GOV_ALUCARD
 
           If in doubt, say N.
 
+config CPU_FREQ_GOV_THUNDERX
+        tristate "'thunderx' cpufreq governor"
+        depends on CPU_FREQ
+        default n
+        help
+          'thunderx' - a "power optimized" governor for Mediatek SoCs
+
+config CPU_FREQ_GOV_POISON
+   tristate "'Poison' cpufreq governor"
+   depends on CPU_FREQ
+   help
+   'Poison' - a "power optimized" governor for Mediatek SoCs
+
 config CPU_FREQ_GOV_DARKNESS
         tristate "'darkness' cpufreq policy governor"
+	depends on CPU_FREQ
 
 menu "x86 CPU frequency scaling drivers"
 depends on X86
