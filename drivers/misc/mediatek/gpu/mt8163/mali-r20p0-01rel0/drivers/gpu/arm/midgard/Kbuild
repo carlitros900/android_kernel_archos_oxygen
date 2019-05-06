@@ -12,7 +12,9 @@
 #
 #
 
-
+#MTK port custom Kbuild
+#To Add 1.environment variable
+include $(src)/Kbuild-mtk-custom-env
 
 # Driver version string which is returned to userspace via an ioctl
 MALI_RELEASE_NAME ?= "r20p0-01rel0"
@@ -61,9 +63,11 @@ DEFINES = \
 
 ifeq ($(KBUILD_EXTMOD),)
 # in-tree
+DEFINES +=-DMALI_KBASE_THIRDPARTY_PATH=../../$(src)/platform/$(CONFIG_MALI_PLATFORM_THIRDPARTY_NAME)
 DEFINES +=-DMALI_KBASE_PLATFORM_PATH=../../$(src)/platform/$(CONFIG_MALI_PLATFORM_NAME)
 else
 # out-of-tree
+DEFINES +=-DMALI_KBASE_THIRDPARTY_PATH=$(src)/platform/$(CONFIG_MALI_PLATFORM_THIRDPARTY_NAME)
 DEFINES +=-DMALI_KBASE_PLATFORM_PATH=$(src)/platform/$(CONFIG_MALI_PLATFORM_NAME)
 endif
 
@@ -118,6 +122,7 @@ SRC := \
 
 
 
+
 ifeq ($(MALI_UNIT_TEST),1)
 	SRC += mali_kbase_tlstream_test.c
 endif
@@ -139,7 +144,8 @@ mali_kbase-y := $(SRC:.c=.o)
 platform_name := $(shell echo $(CONFIG_MALI_PLATFORM_NAME))
 MALI_PLATFORM_DIR := platform/$(platform_name)
 ccflags-y += -I$(src)/$(MALI_PLATFORM_DIR)
-include $(src)/$(MALI_PLATFORM_DIR)/Kbuild
+#include $(src)/$(MALI_PLATFORM_DIR)/Kbuild
+obj-$(CONFIG_MALI_MIDGARD) += platform/
 
 ifeq ($(CONFIG_MALI_DEVFREQ),y)
   ifeq ($(CONFIG_DEVFREQ_THERMAL),y)
@@ -165,6 +171,7 @@ endif
 
 include  $(src)/backend/gpu/Kbuild
 mali_kbase-y += $(BACKEND:.c=.o)
+
 
 
 ccflags-y += -I$(src)/backend/gpu

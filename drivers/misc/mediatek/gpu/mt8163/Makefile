@@ -8,6 +8,7 @@ obj-y += mtk_gpu/g3dkmd/
 obj-y += mtk_gpu/g3dkmd/gpad/
 else
 #obj-y += mali-EAC/drivers/
-obj-y += mali-r7p0-02rel0/drivers/
+#obj-y += mali-r7p0-02rel0/drivers/
+obj-y += mali-r20p0-01rel0/drivers/
 obj-y += mediatek/
 endif
