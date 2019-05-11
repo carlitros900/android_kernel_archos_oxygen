@@ -47,7 +47,11 @@
 #define MAX_PreCC_CHARGING_TIME		(1*30*60)/* 0.5hr */
 
 /* #define MAX_CV_CHARGING_TIME                  1*30*60         // 0.5hr */
-#define MAX_CV_CHARGING_TIME			(3*60*60)/* 3hr */
+#if defined(CONFIG_MTK_DC_DET_VIA_GPIO) || defined(CONFIG_MTK_DC_DET_VIA_ADC)
+#define MAX_CV_CHARGING_TIME			(3*60*60*10)/* 3hr */
+#else
+#define MAX_CV_CHARGING_TIME			(6*60*60)/* 3hr */
+#endif
 
 
 #define MUTEX_TIMEOUT                       (5000)
