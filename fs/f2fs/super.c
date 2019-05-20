@@ -1396,9 +1396,15 @@ try_onemore:
 	sbi->total_valid_block_count =
 				le64_to_cpu(sbi->ckpt->valid_block_count);
 	sbi->last_valid_block_count = sbi->total_valid_block_count;
-	sbi->alloc_valid_block_count = 0;
-	INIT_LIST_HEAD(&sbi->dir_inode_list);
-	spin_lock_init(&sbi->dir_inode_lock);
+	sbi->reserved_blocks = 0;
+	sbi->current_reserved_blocks = 0;
+	limit_reserve_root(sbi);
+
+	for (i = 0; i < NR_INODE_TYPE; i++) {
+		INIT_LIST_HEAD(&sbi->inode_list[i]);
+		spin_lock_init(&sbi->inode_lock[i]);
+	}
+	mutex_init(&sbi->flush_lock);
 
 	init_extent_cache_info(sbi);
 

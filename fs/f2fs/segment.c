@@ -316,7 +316,20 @@ void f2fs_balance_fs_bg(struct f2fs_sb_info *sbi)
 	/* checkpoint is the only way to shrink partial cached entries */
 	if (!available_free_memory(sbi, NAT_ENTRIES) ||
 			excess_prefree_segs(sbi) ||
-			!available_free_memory(sbi, INO_ENTRIES))
+			excess_dirty_nats(sbi) ||
+			excess_dirty_nodes(sbi) ||
+			f2fs_time_over(sbi, CP_TIME)) {
+		if (test_opt(sbi, DATA_FLUSH)) {
+			struct blk_plug plug;
+
+			mutex_lock(&sbi->flush_lock);
+
+			blk_start_plug(&plug);
+			f2fs_sync_dirty_inodes(sbi, FILE_INODE);
+			blk_finish_plug(&plug);
+
+			mutex_unlock(&sbi->flush_lock);
+		}
 		f2fs_sync_fs(sbi->sb, true);
 }
 
