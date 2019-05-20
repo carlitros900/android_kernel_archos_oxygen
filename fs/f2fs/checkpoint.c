@@ -588,15 +588,12 @@ static struct page *validate_checkpoint(struct f2fs_sb_info *sbi,
 	/* Read the 1st cp block in this CP pack */
 	cp_page_1 = get_meta_page(sbi, cp_addr);
 
-	/* get the version number */
-	cp_block = (struct f2fs_checkpoint *)page_address(cp_page_1);
-	crc_offset = le32_to_cpu(cp_block->checksum_offset);
-	if (crc_offset >= blk_size)
-		goto invalid_cp1;
-
-	crc = le32_to_cpu(*((__le32 *)((unsigned char *)cp_block + crc_offset)));
-	if (!f2fs_crc_valid(crc, cp_block, crc_offset))
-		goto invalid_cp1;
+	crc = f2fs_checkpoint_chksum(sbi, *cp_block);
+	if (crc != cur_cp_crc(*cp_block)) {
+		f2fs_put_page(*cp_page, 1);
+		f2fs_msg(sbi->sb, KERN_WARNING, "invalid crc value");
+		return -EINVAL;
+	}
 
 	pre_version = cur_cp_version(cp_block);
 
