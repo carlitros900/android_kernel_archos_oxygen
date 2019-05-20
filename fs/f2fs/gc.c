@@ -297,7 +297,12 @@ static int get_victim_by_default(struct f2fs_sb_info *sbi,
 		secno = GET_SECNO(sbi, segno);
 
 		if (sec_usage_check(sbi, secno))
-			continue;
+			goto next;
+		/* Don't touch checkpointed data */
+		if (unlikely(is_sbi_flag_set(sbi, SBI_CP_DISABLED) &&
+					get_ckpt_valid_blocks(sbi, segno) &&
+					p.alloc_mode != SSR))
+			goto next;
 		if (gc_type == BG_GC && test_bit(secno, dirty_i->victim_secmap))
 			continue;
 
