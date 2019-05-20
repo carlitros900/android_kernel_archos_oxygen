@@ -1297,6 +1297,21 @@ try_onemore:
 	sb->s_max_links = F2FS_LINK_MAX;
 	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
 
+#ifdef CONFIG_QUOTA
+	sb->dq_op = &f2fs_quota_operations;
+	sb->s_qcop = &f2fs_quotactl_ops;
+#if 0	/* not support */
+	sb->s_quota_types = QTYPE_MASK_USR | QTYPE_MASK_GRP | QTYPE_MASK_PRJ;
+
+	if (f2fs_sb_has_quota_ino(sbi)) {
+		for (i = 0; i < MAXQUOTAS; i++) {
+			if (f2fs_qf_ino(sbi->sb, i))
+				sbi->nquota_files++;
+		}
+	}
+#endif
+#endif
+
 	sb->s_op = &f2fs_sops;
 	sb->s_xattr = f2fs_xattr_handlers;
 	sb->s_export_op = &f2fs_export_ops;
