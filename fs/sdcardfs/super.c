@@ -329,6 +329,10 @@ static int sdcardfs_show_options(struct seq_file *m, struct dentry *root)
 
 	if (opts->reserved_mb != 0)
 		seq_printf(m, ",reserved=%uMB", opts->reserved_mb);
+	if (opts->nocache)
+		seq_printf(m, ",nocache");
+	if (opts->unshared_obb)
+		seq_printf(m, ",unshared_obb");
 
 	return 0;
 };
