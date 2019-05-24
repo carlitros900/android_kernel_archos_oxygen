@@ -1013,6 +1013,10 @@ static int f2fs_show_options(struct seq_file *seq, struct dentry *root)
 	else
 		seq_puts(seq, ",nodiscard");
 	if (test_opt(sbi, NOHEAP))
+		seq_puts(seq, ",no_heap");
+	else
+		seq_puts(seq, ",nodiscard");
+	if (test_opt(sbi, NOHEAP))
 		seq_puts(seq, ",no_heap_alloc");
 #ifdef CONFIG_F2FS_FS_XATTR
 	if (test_opt(sbi, XATTR_USER))
