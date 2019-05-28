@@ -809,17 +809,11 @@ bool f2fs_fill_dentries(struct dir_context *ctx, struct f2fs_dentry_ptr *d,
 			int save_len = fstr->len;
 			int ret;
 
-			de_name.name = kmalloc(de_name.len, GFP_NOFS);
-			if (!de_name.name)
-				return false;
-
-			memcpy(de_name.name, d->filename[bit_pos], de_name.len);
-
-			ret = f2fs_fname_disk_to_usr(d->inode, &de->hash_code,
-							&de_name, fstr);
-			kfree(de_name.name);
-			if (ret < 0)
-				return true;
+			err = fscrypt_fname_disk_to_usr(d->inode,
+						(u32)le32_to_cpu(de->hash_code),
+						0, &de_name, fstr);
+			if (err)
+				goto out;
 
 			de_name = *fstr;
 			fstr->len = save_len;
