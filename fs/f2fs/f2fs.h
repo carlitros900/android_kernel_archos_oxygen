@@ -874,8 +874,25 @@ struct f2fs_sb_info {
 	block_t alloc_valid_block_count;	/* # of allocated blocks */
 	block_t discard_blks;			/* discard command candidats */
 	block_t last_valid_block_count;		/* for recovery */
-	u32 s_next_generation;			/* for NFS support */
-	atomic_t nr_pages[NR_COUNT_TYPE];	/* # of pages, see count_type */
+	block_t reserved_blocks;		/* configurable reserved blocks */
+	block_t current_reserved_blocks;	/* current reserved blocks */
+
+	/* Additional tracking for no checkpoint mode */
+	block_t unusable_block_count;		/* # of blocks saved by last cp */
+
+	unsigned int nquota_files;		/* # of quota sysfile */
+	struct rw_semaphore quota_sem;		/* blocking cp for flags */
+
+	/* # of pages, see count_type */
+	atomic_t nr_pages[NR_COUNT_TYPE];
+	/* # of allocated blocks */
+	struct percpu_counter alloc_valid_block_count;
+
+	/* writeback control */
+	atomic_t wb_sync_req[META];	/* count # of WB_SYNC threads */
+
+	/* valid inode count */
+	struct percpu_counter total_valid_inode_count;
 
 	struct f2fs_mount_info mount_opt;	/* mount options */
 
