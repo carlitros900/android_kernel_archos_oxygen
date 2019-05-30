@@ -113,15 +113,28 @@ struct f2fs_attr {
 
 static unsigned char *__struct_ptr(struct f2fs_sb_info *sbi, int struct_type)
 {
-	if (struct_type == GC_THREAD)
-		return (unsigned char *)sbi->gc_thread;
-	else if (struct_type == SM_INFO)
-		return (unsigned char *)SM_I(sbi);
-	else if (struct_type == NM_INFO)
-		return (unsigned char *)NM_I(sbi);
-	else if (struct_type == F2FS_SBI)
-		return (unsigned char *)sbi;
-	return NULL;
+	block_t limit = min((sbi->user_block_count << 1) / 1000,
+			sbi->user_block_count - sbi->reserved_blocks);
+
+	/* limit is 0.2% */
+	if (test_opt(sbi, RESERVE_ROOT) &&
+			F2FS_OPTION(sbi).root_reserved_blocks > limit) {
+		F2FS_OPTION(sbi).root_reserved_blocks = limit;
+		f2fs_msg(sbi->sb, KERN_INFO,
+			"Reduce reserved blocks for root = %u",
+			F2FS_OPTION(sbi).root_reserved_blocks);
+	}
+	if (!test_opt(sbi, RESERVE_ROOT) &&
+		(!uid_eq(F2FS_OPTION(sbi).s_resuid,
+				make_kuid(&init_user_ns, F2FS_DEF_RESUID)) ||
+		!gid_eq(F2FS_OPTION(sbi).s_resgid,
+				make_kgid(&init_user_ns, F2FS_DEF_RESGID))))
+		f2fs_msg(sbi->sb, KERN_INFO,
+			"Ignore s_resuid=%u, s_resgid=%u w/o reserve_root",
+				from_kuid_munged(&init_user_ns,
+					F2FS_OPTION(sbi).s_resuid),
+				from_kgid_munged(&init_user_ns,
+					F2FS_OPTION(sbi).s_resgid));
 }
 
 static ssize_t f2fs_sbi_show(struct f2fs_attr *a,
