@@ -67,6 +67,38 @@ enum {
 	Opt_extent_cache,
 	Opt_noextent_cache,
 	Opt_noinline_data,
+	Opt_data_flush,
+	Opt_reserve_root,
+	Opt_resgid,
+	Opt_resuid,
+	Opt_mode,
+	Opt_io_size_bits,
+	Opt_fault_injection,
+	Opt_fault_type,
+	Opt_lazytime,
+	Opt_nolazytime,
+	Opt_quota,
+	Opt_noquota,
+	Opt_usrquota,
+	Opt_grpquota,
+	Opt_prjquota,
+	Opt_usrjquota,
+	Opt_grpjquota,
+	Opt_prjjquota,
+	Opt_offusrjquota,
+	Opt_offgrpjquota,
+	Opt_offprjjquota,
+	Opt_jqfmt_vfsold,
+	Opt_jqfmt_vfsv0,
+	Opt_jqfmt_vfsv1,
+	Opt_whint,
+	Opt_alloc,
+	Opt_fsync,
+	Opt_test_dummy_encryption,
+	Opt_checkpoint_disable,
+	Opt_checkpoint_disable_cap,
+	Opt_checkpoint_disable_cap_perc,
+	Opt_checkpoint_enable,
 	Opt_err,
 };
 
@@ -91,6 +123,38 @@ static match_table_t f2fs_tokens = {
 	{Opt_extent_cache, "extent_cache"},
 	{Opt_noextent_cache, "noextent_cache"},
 	{Opt_noinline_data, "noinline_data"},
+	{Opt_data_flush, "data_flush"},
+	{Opt_reserve_root, "reserve_root=%u"},
+	{Opt_resgid, "resgid=%u"},
+	{Opt_resuid, "resuid=%u"},
+	{Opt_mode, "mode=%s"},
+	{Opt_io_size_bits, "io_bits=%u"},
+	{Opt_fault_injection, "fault_injection=%u"},
+	{Opt_fault_type, "fault_type=%u"},
+	{Opt_lazytime, "lazytime"},
+	{Opt_nolazytime, "nolazytime"},
+	{Opt_quota, "quota"},
+	{Opt_noquota, "noquota"},
+	{Opt_usrquota, "usrquota"},
+	{Opt_grpquota, "grpquota"},
+	{Opt_prjquota, "prjquota"},
+	{Opt_usrjquota, "usrjquota=%s"},
+	{Opt_grpjquota, "grpjquota=%s"},
+	{Opt_prjjquota, "prjjquota=%s"},
+	{Opt_offusrjquota, "usrjquota="},
+	{Opt_offgrpjquota, "grpjquota="},
+	{Opt_offprjjquota, "prjjquota="},
+	{Opt_jqfmt_vfsold, "jqfmt=vfsold"},
+	{Opt_jqfmt_vfsv0, "jqfmt=vfsv0"},
+	{Opt_jqfmt_vfsv1, "jqfmt=vfsv1"},
+	{Opt_whint, "whint_mode=%s"},
+	{Opt_alloc, "alloc_mode=%s"},
+	{Opt_fsync, "fsync_mode=%s"},
+	{Opt_test_dummy_encryption, "test_dummy_encryption"},
+	{Opt_checkpoint_disable, "checkpoint=disable"},
+	{Opt_checkpoint_disable_cap, "checkpoint=disable:%u"},
+	{Opt_checkpoint_disable_cap_perc, "checkpoint=disable:%u%%"},
+	{Opt_checkpoint_enable, "checkpoint=enable"},
 	{Opt_err, NULL},
 };
 
@@ -410,6 +474,285 @@ static int parse_options(struct super_block *sb, char *options)
 		case Opt_noinline_data:
 			clear_opt(sbi, INLINE_DATA);
 			break;
+		case Opt_data_flush:
+			set_opt(sbi, DATA_FLUSH);
+			break;
+		case Opt_reserve_root:
+			if (args->from && match_int(args, &arg))
+				return -EINVAL;
+			if (test_opt(sbi, RESERVE_ROOT)) {
+				f2fs_msg(sb, KERN_INFO,
+					"Preserve previous reserve_root=%u",
+					F2FS_OPTION(sbi).root_reserved_blocks);
+			} else {
+				F2FS_OPTION(sbi).root_reserved_blocks = arg;
+				set_opt(sbi, RESERVE_ROOT);
+			}
+			break;
+		case Opt_resuid:
+			if (args->from && match_int(args, &arg))
+				return -EINVAL;
+			uid = make_kuid(current_user_ns(), arg);
+			if (!uid_valid(uid)) {
+				f2fs_msg(sb, KERN_ERR,
+					"Invalid uid value %d", arg);
+				return -EINVAL;
+			}
+			F2FS_OPTION(sbi).s_resuid = uid;
+			break;
+		case Opt_resgid:
+			if (args->from && match_int(args, &arg))
+				return -EINVAL;
+			gid = make_kgid(current_user_ns(), arg);
+			if (!gid_valid(gid)) {
+				f2fs_msg(sb, KERN_ERR,
+					"Invalid gid value %d", arg);
+				return -EINVAL;
+			}
+			F2FS_OPTION(sbi).s_resgid = gid;
+			break;
+		case Opt_mode:
+			name = match_strdup(&args[0]);
+
+			if (!name)
+				return -ENOMEM;
+			if (strlen(name) == 8 &&
+					!strncmp(name, "adaptive", 8)) {
+				if (f2fs_sb_has_blkzoned(sbi)) {
+					f2fs_msg(sb, KERN_WARNING,
+						 "adaptive mode is not allowed with "
+						 "zoned block device feature");
+					kvfree(name);
+					return -EINVAL;
+				}
+				set_opt_mode(sbi, F2FS_MOUNT_ADAPTIVE);
+			} else if (strlen(name) == 3 &&
+					!strncmp(name, "lfs", 3)) {
+				set_opt_mode(sbi, F2FS_MOUNT_LFS);
+			} else {
+				kvfree(name);
+				return -EINVAL;
+			}
+			kvfree(name);
+			break;
+		case Opt_io_size_bits:
+			if (args->from && match_int(args, &arg))
+				return -EINVAL;
+			if (arg <= 0 || arg > __ilog2_u32(BIO_MAX_PAGES)) {
+				f2fs_msg(sb, KERN_WARNING,
+					"Not support %d, larger than %d",
+					1 << arg, BIO_MAX_PAGES);
+				return -EINVAL;
+			}
+			F2FS_OPTION(sbi).write_io_size_bits = arg;
+			break;
+#ifdef CONFIG_F2FS_FAULT_INJECTION
+		case Opt_fault_injection:
+			if (args->from && match_int(args, &arg))
+				return -EINVAL;
+			f2fs_build_fault_attr(sbi, arg, F2FS_ALL_FAULT_TYPE);
+			set_opt(sbi, FAULT_INJECTION);
+			break;
+
+		case Opt_fault_type:
+			if (args->from && match_int(args, &arg))
+				return -EINVAL;
+			f2fs_build_fault_attr(sbi, 0, arg);
+			set_opt(sbi, FAULT_INJECTION);
+			break;
+#else
+		case Opt_fault_injection:
+			f2fs_msg(sb, KERN_INFO,
+				"fault_injection options not supported");
+			break;
+
+		case Opt_fault_type:
+			f2fs_msg(sb, KERN_INFO,
+				"fault_type options not supported");
+			break;
+#endif
+		case Opt_lazytime:
+			sb->s_flags |= MS_LAZYTIME;
+			break;
+		case Opt_nolazytime:
+			sb->s_flags &= ~MS_LAZYTIME;
+			break;
+#ifdef CONFIG_QUOTA
+		case Opt_quota:
+		case Opt_usrquota:
+			set_opt(sbi, USRQUOTA);
+			break;
+		case Opt_grpquota:
+			set_opt(sbi, GRPQUOTA);
+			break;
+		case Opt_prjquota:
+			if (F2FS_MAXQUOTAS <= 2) {
+				f2fs_msg(sb, KERN_INFO,
+					"prjquota operations not supported");
+				return -EINVAL;
+			}
+			set_opt(sbi, PRJQUOTA);
+			break;
+		case Opt_usrjquota:
+			ret = f2fs_set_qf_name(sb, USRQUOTA, &args[0]);
+			if (ret)
+				return ret;
+			break;
+		case Opt_grpjquota:
+			ret = f2fs_set_qf_name(sb, GRPQUOTA, &args[0]);
+			if (ret)
+				return ret;
+			break;
+		case Opt_prjjquota:
+			ret = f2fs_set_qf_name(sb, PRJQUOTA, &args[0]);
+			if (ret)
+				return ret;
+			break;
+		case Opt_offusrjquota:
+			ret = f2fs_clear_qf_name(sb, USRQUOTA);
+			if (ret)
+				return ret;
+			break;
+		case Opt_offgrpjquota:
+			ret = f2fs_clear_qf_name(sb, GRPQUOTA);
+			if (ret)
+				return ret;
+			break;
+		case Opt_offprjjquota:
+			ret = f2fs_clear_qf_name(sb, PRJQUOTA);
+			if (ret)
+				return ret;
+			break;
+		case Opt_jqfmt_vfsold:
+			F2FS_OPTION(sbi).s_jquota_fmt = QFMT_VFS_OLD;
+			break;
+		case Opt_jqfmt_vfsv0:
+			F2FS_OPTION(sbi).s_jquota_fmt = QFMT_VFS_V0;
+			break;
+		case Opt_jqfmt_vfsv1:
+			F2FS_OPTION(sbi).s_jquota_fmt = QFMT_VFS_V1;
+			break;
+		case Opt_noquota:
+			clear_opt(sbi, QUOTA);
+			clear_opt(sbi, USRQUOTA);
+			clear_opt(sbi, GRPQUOTA);
+			clear_opt(sbi, PRJQUOTA);
+			break;
+#else
+		case Opt_quota:
+		case Opt_usrquota:
+		case Opt_grpquota:
+		case Opt_prjquota:
+		case Opt_usrjquota:
+		case Opt_grpjquota:
+		case Opt_prjjquota:
+		case Opt_offusrjquota:
+		case Opt_offgrpjquota:
+		case Opt_offprjjquota:
+		case Opt_jqfmt_vfsold:
+		case Opt_jqfmt_vfsv0:
+		case Opt_jqfmt_vfsv1:
+		case Opt_noquota:
+			f2fs_msg(sb, KERN_INFO,
+					"quota operations not supported");
+			break;
+#endif
+		case Opt_whint:
+			name = match_strdup(&args[0]);
+			if (!name)
+				return -ENOMEM;
+			if (strlen(name) == 10 &&
+					!strncmp(name, "user-based", 10)) {
+				F2FS_OPTION(sbi).whint_mode = WHINT_MODE_USER;
+			} else if (strlen(name) == 3 &&
+					!strncmp(name, "off", 3)) {
+				F2FS_OPTION(sbi).whint_mode = WHINT_MODE_OFF;
+			} else if (strlen(name) == 8 &&
+					!strncmp(name, "fs-based", 8)) {
+				F2FS_OPTION(sbi).whint_mode = WHINT_MODE_FS;
+			} else {
+				kvfree(name);
+				return -EINVAL;
+			}
+			kvfree(name);
+			break;
+		case Opt_alloc:
+			name = match_strdup(&args[0]);
+			if (!name)
+				return -ENOMEM;
+
+			if (strlen(name) == 7 &&
+					!strncmp(name, "default", 7)) {
+				F2FS_OPTION(sbi).alloc_mode = ALLOC_MODE_DEFAULT;
+			} else if (strlen(name) == 5 &&
+					!strncmp(name, "reuse", 5)) {
+				F2FS_OPTION(sbi).alloc_mode = ALLOC_MODE_REUSE;
+			} else {
+				kvfree(name);
+				return -EINVAL;
+			}
+			kvfree(name);
+			break;
+		case Opt_fsync:
+			name = match_strdup(&args[0]);
+			if (!name)
+				return -ENOMEM;
+			if (strlen(name) == 5 &&
+					!strncmp(name, "posix", 5)) {
+				F2FS_OPTION(sbi).fsync_mode = FSYNC_MODE_POSIX;
+			} else if (strlen(name) == 6 &&
+					!strncmp(name, "strict", 6)) {
+				F2FS_OPTION(sbi).fsync_mode = FSYNC_MODE_STRICT;
+			} else if (strlen(name) == 9 &&
+					!strncmp(name, "nobarrier", 9)) {
+				F2FS_OPTION(sbi).fsync_mode =
+							FSYNC_MODE_NOBARRIER;
+			} else {
+				kvfree(name);
+				return -EINVAL;
+			}
+			kvfree(name);
+			break;
+		case Opt_test_dummy_encryption:
+#ifdef CONFIG_F2FS_FS_ENCRYPTION
+			if (!f2fs_sb_has_encrypt(sbi)) {
+				f2fs_msg(sb, KERN_ERR, "Encrypt feature is off");
+				return -EINVAL;
+			}
+
+			F2FS_OPTION(sbi).test_dummy_encryption = true;
+			f2fs_msg(sb, KERN_INFO,
+					"Test dummy encryption mode enabled");
+#else
+			f2fs_msg(sb, KERN_INFO,
+					"Test dummy encryption mount option ignored");
+#endif
+			break;
+		case Opt_checkpoint_disable_cap_perc:
+			if (args->from && match_int(args, &arg))
+				return -EINVAL;
+			if (arg < 0 || arg > 100)
+				return -EINVAL;
+			if (arg == 100)
+				F2FS_OPTION(sbi).unusable_cap =
+					sbi->user_block_count;
+			else
+				F2FS_OPTION(sbi).unusable_cap =
+					(sbi->user_block_count / 100) *	arg;
+			set_opt(sbi, DISABLE_CHECKPOINT);
+			break;
+		case Opt_checkpoint_disable_cap:
+			if (args->from && match_int(args, &arg))
+				return -EINVAL;
+			F2FS_OPTION(sbi).unusable_cap = arg;
+			set_opt(sbi, DISABLE_CHECKPOINT);
+			break;
+		case Opt_checkpoint_disable:
+			set_opt(sbi, DISABLE_CHECKPOINT);
+			break;
+		case Opt_checkpoint_enable:
+			clear_opt(sbi, DISABLE_CHECKPOINT);
+			break;
 		default:
 			f2fs_msg(sb, KERN_ERR,
 				"Unrecognized mount option \"%s\" or missing value",
@@ -694,30 +1037,15 @@ static int f2fs_show_options(struct seq_file *seq, struct dentry *root)
 	return 0;
 }
 
-static int segment_info_seq_show(struct seq_file *seq, void *offset)
-{
-	struct super_block *sb = seq->private;
-	struct f2fs_sb_info *sbi = F2FS_SB(sb);
-	unsigned int total_segs =
-			le32_to_cpu(sbi->raw_super->segment_count_main);
-	int i;
-
-	seq_puts(seq, "format: segment_type|valid_blocks\n"
-		"segment_type(0:HD, 1:WD, 2:CD, 3:HN, 4:WN, 5:CN)\n");
-
-	for (i = 0; i < total_segs; i++) {
-		struct seg_entry *se = get_seg_entry(sbi, i);
-
-		if ((i % 10) == 0)
-			seq_printf(seq, "%-10d", i);
-		seq_printf(seq, "%d|%-3u", se->type,
-					get_valid_blocks(sbi, i, 1));
-		if ((i % 10) == 9 || i == (total_segs - 1))
-			seq_putc(seq, '\n');
-		else
-			seq_putc(seq, ' ');
-	}
-
+	if (test_opt(sbi, DISABLE_CHECKPOINT))
+		seq_printf(seq, ",checkpoint=disable:%u",
+				F2FS_OPTION(sbi).unusable_cap);
+	if (F2FS_OPTION(sbi).fsync_mode == FSYNC_MODE_POSIX)
+		seq_printf(seq, ",fsync_mode=%s", "posix");
+	else if (F2FS_OPTION(sbi).fsync_mode == FSYNC_MODE_STRICT)
+		seq_printf(seq, ",fsync_mode=%s", "strict");
+	else if (F2FS_OPTION(sbi).fsync_mode == FSYNC_MODE_NOBARRIER)
+		seq_printf(seq, ",fsync_mode=%s", "nobarrier");
 	return 0;
 }
 
@@ -742,6 +1070,16 @@ static void default_options(struct f2fs_sb_info *sbi)
 	set_opt(sbi, BG_GC);
 	set_opt(sbi, INLINE_DATA);
 	set_opt(sbi, EXTENT_CACHE);
+	set_opt(sbi, NOHEAP);
+	sbi->sb->s_flags |= MS_LAZYTIME;
+	clear_opt(sbi, DISABLE_CHECKPOINT);
+	F2FS_OPTION(sbi).unusable_cap = 0;
+	set_opt(sbi, FLUSH_MERGE);
+	set_opt(sbi, DISCARD);
+	if (f2fs_sb_has_blkzoned(sbi))
+		set_opt_mode(sbi, F2FS_MOUNT_LFS);
+	else
+		set_opt_mode(sbi, F2FS_MOUNT_ADAPTIVE);
 
 #ifdef CONFIG_F2FS_FS_XATTR
 	set_opt(sbi, XATTR_USER);
@@ -749,6 +1087,82 @@ static void default_options(struct f2fs_sb_info *sbi)
 #ifdef CONFIG_F2FS_FS_POSIX_ACL
 	set_opt(sbi, POSIX_ACL);
 #endif
+
+	f2fs_build_fault_attr(sbi, 0, 0);
+}
+
+#ifdef CONFIG_QUOTA
+static int f2fs_enable_quotas(struct super_block *sb);
+#endif
+
+static int f2fs_disable_checkpoint(struct f2fs_sb_info *sbi)
+{
+	unsigned int s_flags = sbi->sb->s_flags;
+	struct cp_control cpc;
+	int err = 0;
+	int ret;
+	block_t unusable;
+
+	if (s_flags & MS_RDONLY) {
+		f2fs_msg(sbi->sb, KERN_ERR,
+				"checkpoint=disable on readonly fs");
+		return -EINVAL;
+	}
+	sbi->sb->s_flags |= MS_ACTIVE;
+
+	f2fs_update_time(sbi, DISABLE_TIME);
+
+	while (!f2fs_time_over(sbi, DISABLE_TIME)) {
+		mutex_lock(&sbi->gc_mutex);
+		err = f2fs_gc(sbi, true, false, NULL_SEGNO);
+		if (err == -ENODATA) {
+			err = 0;
+			break;
+		}
+		if (err && err != -EAGAIN)
+			break;
+	}
+
+	ret = sync_filesystem(sbi->sb);
+	if (ret || err) {
+		err = ret ? ret: err;
+		goto restore_flag;
+	}
+
+	unusable = f2fs_get_unusable_blocks(sbi);
+	if (f2fs_disable_cp_again(sbi, unusable)) {
+		err = -EAGAIN;
+		goto restore_flag;
+	}
+
+	mutex_lock(&sbi->gc_mutex);
+	cpc.reason = CP_PAUSE;
+	set_sbi_flag(sbi, SBI_CP_DISABLED);
+	err = f2fs_write_checkpoint(sbi, &cpc);
+	if (err)
+		goto out_unlock;
+
+	spin_lock(&sbi->stat_lock);
+	sbi->unusable_block_count = unusable;
+	spin_unlock(&sbi->stat_lock);
+
+out_unlock:
+	mutex_unlock(&sbi->gc_mutex);
+restore_flag:
+	sbi->sb->s_flags = s_flags;	/* Restore MS_RDONLY status */
+	return err;
+}
+
+static void f2fs_enable_checkpoint(struct f2fs_sb_info *sbi)
+{
+	mutex_lock(&sbi->gc_mutex);
+	f2fs_dirty_to_prefree(sbi);
+
+	clear_sbi_flag(sbi, SBI_CP_DISABLED);
+	set_sbi_flag(sbi, SBI_IS_DIRTY);
+	mutex_unlock(&sbi->gc_mutex);
+
+	f2fs_sync_fs(sbi->sb, 1);
 }
 
 static int f2fs_remount(struct super_block *sb, int *flags, char *data)
