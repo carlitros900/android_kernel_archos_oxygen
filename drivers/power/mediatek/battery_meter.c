@@ -1100,6 +1100,15 @@ int BattVoltToTemp(int dwVolt)
 
 int force_get_tbat(kal_bool update)
 {
+	int bat_temperature_volt = 0;
+	int bat_temperature_val = 0;
+	static int pre_bat_temperature_val = -1;
+	int fg_r_value = 0;
+	signed int fg_current_temp = 0;
+	kal_bool fg_current_state = KAL_FALSE;
+	int bat_temperature_volt_temp = 0;
+	int ret = 0;
+
 #if defined(CONFIG_POWER_EXT) || defined(FIXED_TBAT_25)
 	bm_print(BM_LOG_CRTI, "[force_get_tbat] fixed TBAT=25 t\n");
 	return 25;
@@ -1113,15 +1122,6 @@ int force_get_tbat(kal_bool update)
 		return arg;
 #endif
 #endif
-		
-	int bat_temperature_volt = 0;
-	int bat_temperature_val = 0;
-	static int pre_bat_temperature_val = -1;
-	int fg_r_value = 0;
-	signed int fg_current_temp = 0;
-	kal_bool fg_current_state = KAL_FALSE;
-	int bat_temperature_volt_temp = 0;
-	int ret = 0;
 
 	if (batt_meter_cust_data.fixed_tbat_25) {
 		bm_print(BM_LOG_CRTI, "[force_get_tbat] fixed TBAT=25 t\n");
