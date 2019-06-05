@@ -1471,6 +1471,38 @@ static inline void f2fs_change_bit(unsigned int nr, char *addr)
 	*addr ^= mask;
 }
 
+/*
+ * On-disk inode flags (f2fs_inode::i_flags)
+ */
+#define F2FS_SYNC_FL			0x00000008 /* Synchronous updates */
+#define F2FS_IMMUTABLE_FL		0x00000010 /* Immutable file */
+#define F2FS_APPEND_FL			0x00000020 /* writes to file may only append */
+#define F2FS_NODUMP_FL			0x00000040 /* do not dump file */
+#define F2FS_NOATIME_FL			0x00000080 /* do not update atime */
+#define F2FS_INDEX_FL			0x00001000 /* hash-indexed directory */
+#define F2FS_DIRSYNC_FL			0x00010000 /* dirsync behaviour (directories only) */
+#define F2FS_PROJINHERIT_FL		0x20000000 /* Create with parents projid */
+
+/* Flags that should be inherited by new inodes from their parent. */
+#define F2FS_FL_INHERITED (F2FS_SYNC_FL | F2FS_NODUMP_FL | F2FS_NOATIME_FL | \
+			   F2FS_DIRSYNC_FL | F2FS_PROJINHERIT_FL)
+
+/* Flags that are appropriate for regular files (all but dir-specific ones). */
+#define F2FS_REG_FLMASK		(~F2FS_DIRSYNC_FL)
+
+/* Flags that are appropriate for non-directories/regular files. */
+#define F2FS_OTHER_FLMASK	(F2FS_NODUMP_FL | F2FS_NOATIME_FL)
+
+static inline __u32 f2fs_mask_flags(umode_t mode, __u32 flags)
+{
+	if (S_ISDIR(mode))
+		return flags;
+	else if (S_ISREG(mode))
+		return flags & F2FS_REG_FLMASK;
+	else
+		return flags & F2FS_OTHER_FLMASK;
+}
+
 /* used for f2fs_inode_info->flags */
 enum {
 	FI_NEW_INODE,		/* indicate newly allocated inode */
