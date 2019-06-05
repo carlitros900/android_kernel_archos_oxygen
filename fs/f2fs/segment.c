@@ -2125,14 +2125,141 @@ static void allocate_segment_by_default(struct f2fs_sb_info *sbi,
 
 	if (force)
 		new_curseg(sbi, type, true);
-	else if (type == CURSEG_WARM_NODE)
+	else if (!is_set_ckpt_flags(sbi, CP_CRC_RECOVERY_FLAG) &&
+					type == CURSEG_WARM_NODE)
 		new_curseg(sbi, type, false);
-	else if (curseg->alloc_type == LFS && is_next_segment_free(sbi, type))
+	else if (curseg->alloc_type == LFS && is_next_segment_free(sbi, type) &&
+			likely(!is_sbi_flag_set(sbi, SBI_CP_DISABLED)))
 		new_curseg(sbi, type, false);
-	else if (need_SSR(sbi) && get_ssr_segment(sbi, type))
-		change_curseg(sbi, type, true);
+	else if (f2fs_need_SSR(sbi) && get_ssr_segment(sbi, type))
+		change_curseg(sbi, type);
 	else
 		new_curseg(sbi, type, false);
+
+	stat_inc_seg_type(sbi, curseg);
+}
+
+void allocate_segment_for_resize(struct f2fs_sb_info *sbi, int type,
+					unsigned int start, unsigned int end)
+{
+	struct curseg_info *curseg = CURSEG_I(sbi, type);
+	unsigned int segno;
+
+	down_read(&SM_I(sbi)->curseg_lock);
+	mutex_lock(&curseg->curseg_mutex);
+	down_write(&SIT_I(sbi)->sentry_lock);
+
+	segno = CURSEG_I(sbi, type)->segno;
+	if (segno < start || segno > end)
+		goto unlock;
+
+	if (f2fs_need_SSR(sbi) && get_ssr_segment(sbi, type))
+		change_curseg(sbi, type);
+	else
+		new_curseg(sbi, type, true);
+
+	stat_inc_seg_type(sbi, curseg);
+
+	locate_dirty_segment(sbi, segno);
+unlock:
+	up_write(&SIT_I(sbi)->sentry_lock);
+
+	if (segno != curseg->segno)
+		f2fs_msg(sbi->sb, KERN_NOTICE,
+			"For resize: curseg of type %d: %u ==> %u",
+			type, segno, curseg->segno);
+
+	mutex_unlock(&curseg->curseg_mutex);
+	up_read(&SM_I(sbi)->curseg_lock);
+}
+
+void f2fs_allocate_new_segments(struct f2fs_sb_info *sbi)
+{
+	struct curseg_info *curseg;
+	unsigned int old_segno;
+	int i;
+
+	down_write(&SIT_I(sbi)->sentry_lock);
+
+	for (i = CURSEG_HOT_DATA; i <= CURSEG_COLD_DATA; i++) {
+		curseg = CURSEG_I(sbi, i);
+		old_segno = curseg->segno;
+		SIT_I(sbi)->s_ops->allocate_segment(sbi, i, true);
+		locate_dirty_segment(sbi, old_segno);
+	}
+
+	up_write(&SIT_I(sbi)->sentry_lock);
+}
+
+static const struct segment_allocation default_salloc_ops = {
+	.allocate_segment = allocate_segment_by_default,
+};
+
+bool f2fs_exist_trim_candidates(struct f2fs_sb_info *sbi,
+						struct cp_control *cpc)
+{
+	__u64 trim_start = cpc->trim_start;
+	bool has_candidate = false;
+
+	down_write(&SIT_I(sbi)->sentry_lock);
+	for (; cpc->trim_start <= cpc->trim_end; cpc->trim_start++) {
+		if (add_discard_addrs(sbi, cpc, true)) {
+			has_candidate = true;
+			break;
+		}
+	}
+	up_write(&SIT_I(sbi)->sentry_lock);
+
+	cpc->trim_start = trim_start;
+	return has_candidate;
+}
+
+static unsigned int __issue_discard_cmd_range(struct f2fs_sb_info *sbi,
+					struct discard_policy *dpolicy,
+					unsigned int start, unsigned int end)
+{
+	struct discard_cmd_control *dcc = SM_I(sbi)->dcc_info;
+	struct discard_cmd *prev_dc = NULL, *next_dc = NULL;
+	struct rb_node **insert_p = NULL, *insert_parent = NULL;
+	struct discard_cmd *dc;
+	struct blk_plug plug;
+	int issued;
+	unsigned int trimmed = 0;
+
+next:
+	issued = 0;
+
+	mutex_lock(&dcc->cmd_lock);
+	if (unlikely(dcc->rbtree_check))
+		f2fs_bug_on(sbi, !f2fs_check_rb_tree_consistence(sbi,
+								&dcc->root));
+
+	dc = (struct discard_cmd *)f2fs_lookup_rb_tree_ret(&dcc->root,
+					NULL, start,
+					(struct rb_entry **)&prev_dc,
+					(struct rb_entry **)&next_dc,
+					&insert_p, &insert_parent, true);
+	if (!dc)
+		dc = next_dc;
+
+	blk_start_plug(&plug);
+
+	while (dc && dc->lstart <= end) {
+		struct rb_node *node;
+		int err = 0;
+
+		if (dc->len < dpolicy->granularity)
+			goto skip;
+
+		if (dc->state != D_PREP) {
+			list_move_tail(&dc->list, &dcc->fstrim_list);
+			goto skip;
+		}
+
+		err = __submit_discard_cmd(sbi, dpolicy, dc, &issued);
+
+		if (issued >= dpolicy->max_requests) {
+			start = dc->lstart + dc->len;
 
 	stat_inc_seg_type(sbi, curseg);
 }
@@ -2923,7 +3050,7 @@ void flush_sit_entries(struct f2fs_sb_info *sbi, struct cp_control *cpc)
 	struct f2fs_summary_block *sum = curseg->sum_blk;
 	struct sit_entry_set *ses, *tmp;
 	struct list_head *head = &SM_I(sbi)->sit_entry_set;
-	bool to_journal = true;
+	bool to_journal = !is_sbi_flag_set(sbi, SBI_IS_RESIZEFS);
 	struct seg_entry *se;
 
 	mutex_lock(&curseg->curseg_mutex);
@@ -2943,7 +3070,8 @@ void flush_sit_entries(struct f2fs_sb_info *sbi, struct cp_control *cpc)
 	 * entries, remove all entries from journal and add and account
 	 * them in sit entry set.
 	 */
-	if (!__has_cursum_space(sum, sit_i->dirty_sentries, SIT_JOURNAL))
+	if (!__has_cursum_space(journal, sit_i->dirty_sentries, SIT_JOURNAL) ||
+								!to_journal)
 		remove_sits_in_journal(sbi);
 
 	/*

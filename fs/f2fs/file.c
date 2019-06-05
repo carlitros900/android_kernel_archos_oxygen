@@ -1782,6 +1782,27 @@ static int f2fs_ioc_gc(struct file *filp, unsigned long arg)
 	return 0;
 }
 
+static int f2fs_ioc_resize_fs(struct file *filp, unsigned long arg)
+{
+	struct f2fs_sb_info *sbi = F2FS_I_SB(file_inode(filp));
+	__u64 block_count;
+	int ret;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (f2fs_readonly(sbi->sb))
+		return -EROFS;
+
+	if (copy_from_user(&block_count, (void __user *)arg,
+			   sizeof(block_count)))
+		return -EFAULT;
+
+	ret = f2fs_resize_fs(sbi, block_count);
+
+	return ret;
+}
+
 long f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	switch (cmd) {
@@ -1813,6 +1834,26 @@ long f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return f2fs_ioc_get_encryption_pwsalt(filp, arg);
 	case F2FS_IOC_GARBAGE_COLLECT:
 		return f2fs_ioc_gc(filp, arg);
+	case F2FS_IOC_GARBAGE_COLLECT_RANGE:
+		return f2fs_ioc_gc_range(filp, arg);
+	case F2FS_IOC_WRITE_CHECKPOINT:
+		return f2fs_ioc_write_checkpoint(filp, arg);
+	case F2FS_IOC_DEFRAGMENT:
+		return f2fs_ioc_defragment(filp, arg);
+	case F2FS_IOC_MOVE_RANGE:
+		return f2fs_ioc_move_range(filp, arg);
+	case F2FS_IOC_FLUSH_DEVICE:
+		return f2fs_ioc_flush_device(filp, arg);
+	case F2FS_IOC_GET_FEATURES:
+		return f2fs_ioc_get_features(filp, arg);
+	case F2FS_IOC_GET_PIN_FILE:
+		return f2fs_ioc_get_pin_file(filp, arg);
+	case F2FS_IOC_SET_PIN_FILE:
+		return f2fs_ioc_set_pin_file(filp, arg);
+	case F2FS_IOC_PRECACHE_EXTENTS:
+		return f2fs_ioc_precache_extents(filp, arg);
+	case F2FS_IOC_RESIZE_FS:
+		return f2fs_ioc_resize_fs(filp, arg);
 	default:
 		return -ENOTTY;
 	}
@@ -1839,6 +1880,30 @@ long f2fs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	case F2FS_IOC32_SETFLAGS:
 		cmd = F2FS_IOC_SETFLAGS;
+		break;
+	case F2FS_IOC32_GETVERSION:
+		cmd = F2FS_IOC_GETVERSION;
+		break;
+	case F2FS_IOC_START_ATOMIC_WRITE:
+	case F2FS_IOC_COMMIT_ATOMIC_WRITE:
+	case F2FS_IOC_START_VOLATILE_WRITE:
+	case F2FS_IOC_RELEASE_VOLATILE_WRITE:
+	case F2FS_IOC_ABORT_VOLATILE_WRITE:
+	case F2FS_IOC_SHUTDOWN:
+	case F2FS_IOC_SET_ENCRYPTION_POLICY:
+	case F2FS_IOC_GET_ENCRYPTION_PWSALT:
+	case F2FS_IOC_GET_ENCRYPTION_POLICY:
+	case F2FS_IOC_GARBAGE_COLLECT:
+	case F2FS_IOC_GARBAGE_COLLECT_RANGE:
+	case F2FS_IOC_WRITE_CHECKPOINT:
+	case F2FS_IOC_DEFRAGMENT:
+	case F2FS_IOC_MOVE_RANGE:
+	case F2FS_IOC_FLUSH_DEVICE:
+	case F2FS_IOC_GET_FEATURES:
+	case F2FS_IOC_GET_PIN_FILE:
+	case F2FS_IOC_SET_PIN_FILE:
+	case F2FS_IOC_PRECACHE_EXTENTS:
+	case F2FS_IOC_RESIZE_FS:
 		break;
 	default:
 		return -ENOIOCTLCMD;
