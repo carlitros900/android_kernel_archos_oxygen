@@ -9,7 +9,7 @@
  *  Simplified starting of init:  Michael A. Griffith <grif@acm.org>
  */
 
-#define DEBUG		/* Enable initcall_debug */
+//#define DEBUG		/* Enable initcall_debug */
 
 #include <linux/types.h>
 #include <linux/module.h>
@@ -698,7 +698,7 @@ static void __init do_ctors(void)
 #endif
 }
 
-bool initcall_debug;
+bool initcall_debug = false;
 core_param(initcall_debug, initcall_debug, bool, 0644);
 
 #ifdef CONFIG_KALLSYMS
@@ -765,6 +765,7 @@ static bool __init_or_module initcall_blacklisted(initcall_t fn)
 #endif
 __setup("initcall_blacklist=", initcall_blacklist);
 
+#if 0
 static int __init_or_module do_one_initcall_debug(initcall_t fn)
 {
 	ktime_t calltime, delta, rettime;
@@ -782,6 +783,7 @@ static int __init_or_module do_one_initcall_debug(initcall_t fn)
 
 	return ret;
 }
+#endif
 
 int __init_or_module do_one_initcall(initcall_t fn)
 {
@@ -796,10 +798,10 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	ret = do_one_initcall_debug(fn);
 #else
 	ts = sched_clock();
-	if (initcall_debug)
-		ret = do_one_initcall_debug(fn);
-	else
-		ret = fn();
+	//if (initcall_debug)
+	//	ret = do_one_initcall_debug(fn);
+	//else
+	ret = fn();
 	ts = sched_clock() - ts;
 #endif
 	msgbuf[0] = 0;
