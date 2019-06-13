@@ -23,7 +23,7 @@ After it, choose the version you would like to build:
 
         $ mv android_kernel_archos_oxygen kernel
         $ cd kernel
-        $ git checkout feature/merger-freezerfhd
+        $ git checkout 3.18.140-NovaKernel
 
 At the same level of the "kernel" directory:
 
