@@ -1136,6 +1136,20 @@ static inline bool inc_valid_block_count(struct f2fs_sb_info *sbi,
 	return true;
 }
 
+__printf(2, 3)
+void f2fs_printk(struct f2fs_sb_info *sbi, const char *fmt, ...);
+
+#define f2fs_err(sbi, fmt, ...)						\
+	f2fs_printk(sbi, KERN_ERR fmt, ##__VA_ARGS__)
+#define f2fs_warn(sbi, fmt, ...)					\
+	f2fs_printk(sbi, KERN_WARNING fmt, ##__VA_ARGS__)
+#define f2fs_notice(sbi, fmt, ...)					\
+	f2fs_printk(sbi, KERN_NOTICE fmt, ##__VA_ARGS__)
+#define f2fs_info(sbi, fmt, ...)					\
+	f2fs_printk(sbi, KERN_INFO fmt, ##__VA_ARGS__)
+#define f2fs_debug(sbi, fmt, ...)					\
+	f2fs_printk(sbi, KERN_DEBUG fmt, ##__VA_ARGS__)
+
 static inline void dec_valid_block_count(struct f2fs_sb_info *sbi,
 						struct inode *inode,
 						blkcnt_t count)
@@ -1146,6 +1160,15 @@ static inline void dec_valid_block_count(struct f2fs_sb_info *sbi,
 	inode->i_blocks -= count;
 	sbi->total_valid_block_count -= (block_t)count;
 	spin_unlock(&sbi->stat_lock);
+	if (unlikely(inode->i_blocks < sectors)) {
+		f2fs_warn(sbi, "Inconsistent i_blocks, ino:%lu, iblocks:%llu, sectors:%llu",
+			  inode->i_ino,
+			  (unsigned long long)inode->i_blocks,
+			  (unsigned long long)sectors);
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		return;
+	}
+	f2fs_i_blocks_write(inode, count, false, true);
 }
 
 static inline void inc_page_count(struct f2fs_sb_info *sbi, int count_type)
@@ -1330,6 +1353,19 @@ static inline void dec_valid_node_count(struct f2fs_sb_info *sbi,
 	sbi->total_valid_block_count--;
 
 	spin_unlock(&sbi->stat_lock);
+
+	if (is_inode) {
+		dquot_free_inode(inode);
+	} else {
+		if (unlikely(inode->i_blocks == 0)) {
+			f2fs_warn(sbi, "Inconsistent i_blocks, ino:%lu, iblocks:%llu",
+				  inode->i_ino,
+				  (unsigned long long)inode->i_blocks);
+			set_sbi_flag(sbi, SBI_NEED_FSCK);
+			return;
+		}
+		f2fs_i_blocks_write(inode, 1, false, true);
+	}
 }
 
 static inline unsigned int valid_node_count(struct f2fs_sb_info *sbi)
@@ -1802,11 +1838,84 @@ static inline void *f2fs_kvzalloc(size_t size, gfp_t flags)
 	((is_inode_flag_set(F2FS_I(i), FI_ACL_MODE)) ? \
 	 (F2FS_I(i)->i_acl_mode) : ((i)->i_mode))
 
-/* get offset of first page in next direct node */
-#define PGOFS_OF_NEXT_DNODE(pgofs, fi)				\
-	((pgofs < ADDRS_PER_INODE(fi)) ? ADDRS_PER_INODE(fi) :	\
-	(pgofs - ADDRS_PER_INODE(fi) + ADDRS_PER_BLOCK) /	\
-	ADDRS_PER_BLOCK * ADDRS_PER_BLOCK + ADDRS_PER_INODE(fi))
+#define F2FS_TOTAL_EXTRA_ATTR_SIZE			\
+	(offsetof(struct f2fs_inode, i_extra_end) -	\
+	offsetof(struct f2fs_inode, i_extra_isize))	\
+
+#define F2FS_OLD_ATTRIBUTE_SIZE	(offsetof(struct f2fs_inode, i_addr))
+#define F2FS_FITS_IN_INODE(f2fs_inode, extra_isize, field)		\
+		((offsetof(typeof(*(f2fs_inode)), field) +	\
+		sizeof((f2fs_inode)->field))			\
+		<= (F2FS_OLD_ATTRIBUTE_SIZE + (extra_isize)))	\
+
+static inline void f2fs_reset_iostat(struct f2fs_sb_info *sbi)
+{
+	int i;
+
+	spin_lock(&sbi->iostat_lock);
+	for (i = 0; i < NR_IO_TYPE; i++)
+		sbi->write_iostat[i] = 0;
+	spin_unlock(&sbi->iostat_lock);
+}
+
+static inline void f2fs_update_iostat(struct f2fs_sb_info *sbi,
+			enum iostat_type type, unsigned long long io_bytes)
+{
+	if (!sbi->iostat_enable)
+		return;
+	spin_lock(&sbi->iostat_lock);
+	sbi->write_iostat[type] += io_bytes;
+
+	if (type == APP_WRITE_IO || type == APP_DIRECT_IO)
+		sbi->write_iostat[APP_BUFFERED_IO] =
+			sbi->write_iostat[APP_WRITE_IO] -
+			sbi->write_iostat[APP_DIRECT_IO];
+	spin_unlock(&sbi->iostat_lock);
+}
+
+#define __is_large_section(sbi)		((sbi)->segs_per_sec > 1)
+
+#define __is_meta_io(fio) (PAGE_TYPE_OF_BIO((fio)->type) == META)
+
+bool f2fs_is_valid_blkaddr(struct f2fs_sb_info *sbi,
+					block_t blkaddr, int type);
+static inline void verify_blkaddr(struct f2fs_sb_info *sbi,
+					block_t blkaddr, int type)
+{
+	if (!f2fs_is_valid_blkaddr(sbi, blkaddr, type)) {
+		f2fs_err(sbi, "invalid blkaddr: %u, type: %d, run fsck to fix.",
+			 blkaddr, type);
+		f2fs_bug_on(sbi, 1);
+	}
+}
+
+static inline bool __is_valid_data_blkaddr(block_t blkaddr)
+{
+	if (blkaddr == NEW_ADDR || blkaddr == NULL_ADDR)
+		return false;
+	return true;
+}
+
+static inline void f2fs_set_page_private(struct page *page,
+						unsigned long data)
+{
+	if (PagePrivate(page))
+		return;
+
+	get_page(page);
+	SetPagePrivate(page);
+	set_page_private(page, data);
+}
+
+static inline void f2fs_clear_page_private(struct page *page)
+{
+	if (!PagePrivate(page))
+		return;
+
+	set_page_private(page, 0);
+	ClearPagePrivate(page);
+	f2fs_put_page(page, 0);
+}
 
 /*
  * file.c
@@ -1882,10 +1991,14 @@ static inline int f2fs_add_link(struct dentry *dentry, struct inode *inode)
 /*
  * super.c
  */
-int f2fs_commit_super(struct f2fs_sb_info *, bool);
-int f2fs_sync_fs(struct super_block *, int);
-extern __printf(3, 4)
-void f2fs_msg(struct super_block *, const char *, const char *, ...);
+int f2fs_inode_dirtied(struct inode *inode, bool sync);
+void f2fs_inode_synced(struct inode *inode);
+int f2fs_enable_quota_files(struct f2fs_sb_info *sbi, bool rdonly);
+int f2fs_quota_sync(struct super_block *sb, int type);
+void f2fs_quota_off_umount(struct super_block *sb);
+int f2fs_commit_super(struct f2fs_sb_info *sbi, bool recover);
+int f2fs_sync_fs(struct super_block *sb, int sync);
+int f2fs_sanity_check_ckpt(struct f2fs_sb_info *sbi);
 
 /*
  * hash.c

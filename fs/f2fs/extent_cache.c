@@ -18,6 +18,178 @@
 #include "node.h"
 #include <trace/events/f2fs.h>
 
+static struct rb_entry *__lookup_rb_tree_fast(struct rb_entry *cached_re,
+							unsigned int ofs)
+{
+	if (cached_re) {
+		if (cached_re->ofs <= ofs &&
+				cached_re->ofs + cached_re->len > ofs) {
+			return cached_re;
+		}
+	}
+	return NULL;
+}
+
+static struct rb_entry *__lookup_rb_tree_slow(struct rb_root *root,
+							unsigned int ofs)
+{
+	struct rb_node *node = root->rb_node;
+	struct rb_entry *re;
+
+	while (node) {
+		re = rb_entry(node, struct rb_entry, rb_node);
+
+		if (ofs < re->ofs)
+			node = node->rb_left;
+		else if (ofs >= re->ofs + re->len)
+			node = node->rb_right;
+		else
+			return re;
+	}
+	return NULL;
+}
+
+struct rb_entry *f2fs_lookup_rb_tree(struct rb_root *root,
+				struct rb_entry *cached_re, unsigned int ofs)
+{
+	struct rb_entry *re;
+
+	re = __lookup_rb_tree_fast(cached_re, ofs);
+	if (!re)
+		return __lookup_rb_tree_slow(root, ofs);
+
+	return re;
+}
+
+struct rb_node **f2fs_lookup_rb_tree_for_insert(struct f2fs_sb_info *sbi,
+				struct rb_root *root, struct rb_node **parent,
+				unsigned int ofs)
+{
+	struct rb_node **p = &root->rb_node;
+	struct rb_entry *re;
+
+	while (*p) {
+		*parent = *p;
+		re = rb_entry(*parent, struct rb_entry, rb_node);
+
+		if (ofs < re->ofs)
+			p = &(*p)->rb_left;
+		else if (ofs >= re->ofs + re->len)
+			p = &(*p)->rb_right;
+		else
+			f2fs_bug_on(sbi, 1);
+	}
+
+	return p;
+}
+
+/*
+ * lookup rb entry in position of @ofs in rb-tree,
+ * if hit, return the entry, otherwise, return NULL
+ * @prev_ex: extent before ofs
+ * @next_ex: extent after ofs
+ * @insert_p: insert point for new extent at ofs
+ * in order to simpfy the insertion after.
+ * tree must stay unchanged between lookup and insertion.
+ */
+struct rb_entry *f2fs_lookup_rb_tree_ret(struct rb_root *root,
+				struct rb_entry *cached_re,
+				unsigned int ofs,
+				struct rb_entry **prev_entry,
+				struct rb_entry **next_entry,
+				struct rb_node ***insert_p,
+				struct rb_node **insert_parent,
+				bool force)
+{
+	struct rb_node **pnode = &root->rb_node;
+	struct rb_node *parent = NULL, *tmp_node;
+	struct rb_entry *re = cached_re;
+
+	*insert_p = NULL;
+	*insert_parent = NULL;
+	*prev_entry = NULL;
+	*next_entry = NULL;
+
+	if (RB_EMPTY_ROOT(root))
+		return NULL;
+
+	if (re) {
+		if (re->ofs <= ofs && re->ofs + re->len > ofs)
+			goto lookup_neighbors;
+	}
+
+	while (*pnode) {
+		parent = *pnode;
+		re = rb_entry(*pnode, struct rb_entry, rb_node);
+
+		if (ofs < re->ofs)
+			pnode = &(*pnode)->rb_left;
+		else if (ofs >= re->ofs + re->len)
+			pnode = &(*pnode)->rb_right;
+		else
+			goto lookup_neighbors;
+	}
+
+	*insert_p = pnode;
+	*insert_parent = parent;
+
+	re = rb_entry(parent, struct rb_entry, rb_node);
+	tmp_node = parent;
+	if (parent && ofs > re->ofs)
+		tmp_node = rb_next(parent);
+	*next_entry = rb_entry_safe(tmp_node, struct rb_entry, rb_node);
+
+	tmp_node = parent;
+	if (parent && ofs < re->ofs)
+		tmp_node = rb_prev(parent);
+	*prev_entry = rb_entry_safe(tmp_node, struct rb_entry, rb_node);
+	return NULL;
+
+lookup_neighbors:
+	if (ofs == re->ofs || force) {
+		/* lookup prev node for merging backward later */
+		tmp_node = rb_prev(&re->rb_node);
+		*prev_entry = rb_entry_safe(tmp_node, struct rb_entry, rb_node);
+	}
+	if (ofs == re->ofs + re->len - 1 || force) {
+		/* lookup next node for merging frontward later */
+		tmp_node = rb_next(&re->rb_node);
+		*next_entry = rb_entry_safe(tmp_node, struct rb_entry, rb_node);
+	}
+	return re;
+}
+
+bool f2fs_check_rb_tree_consistence(struct f2fs_sb_info *sbi,
+						struct rb_root *root)
+{
+#ifdef CONFIG_F2FS_CHECK_FS
+	struct rb_node *cur = rb_first(root), *next;
+	struct rb_entry *cur_re, *next_re;
+
+	if (!cur)
+		return true;
+
+	while (cur) {
+		next = rb_next(cur);
+		if (!next)
+			return true;
+
+		cur_re = rb_entry(cur, struct rb_entry, rb_node);
+		next_re = rb_entry(next, struct rb_entry, rb_node);
+
+		if (cur_re->ofs + cur_re->len > next_re->ofs) {
+			f2fs_info(sbi, "inconsistent rbtree, cur(%u, %u) next(%u, %u)",
+				  cur_re->ofs, cur_re->len,
+				  next_re->ofs, next_re->len);
+			return false;
+		}
+
+		cur = next;
+	}
+#endif
+	return true;
+}
+
 static struct kmem_cache *extent_tree_slab;
 static struct kmem_cache *extent_node_slab;
 

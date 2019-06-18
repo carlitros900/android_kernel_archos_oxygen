@@ -286,6 +286,16 @@ static int __recover_dot_dentries(struct inode *dir, nid_t pino)
 	struct page *page;
 	int err = 0;
 
+	if (f2fs_readonly(sbi->sb)) {
+		f2fs_info(sbi, "skip recovering inline_dots inode (ino:%lu, pino:%u) in readonly mountpoint",
+			  dir->i_ino, pino);
+		return 0;
+	}
+
+	dquot_initialize(dir);
+
+	f2fs_balance_fs(sbi, true);
+
 	f2fs_lock_op(sbi);
 
 	de = f2fs_find_entry(dir, &dot, &page, 0);
@@ -350,12 +360,13 @@ static struct dentry *f2fs_lookup(struct inode *dir, struct dentry *dentry,
 		if (err)
 			goto err_out;
 	}
-
-	if (S_ISDIR(inode->i_mode) && !dentry->d_op) {
-		err = f2fs_getxattr(inode, F2FS_XATTR_INDEX_USER,
-				    F2FS_XATTR_DIR_NOCASE, NULL, 0, NULL);
-		if (err > 0)
-			d_set_d_op(dentry, &f2fs_dops);
+	if (f2fs_encrypted_inode(dir) &&
+	    (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode)) &&
+	    !fscrypt_has_permitted_context(dir, inode)) {
+		f2fs_warn(F2FS_I_SB(inode), "Inconsistent encryption contexts: %lu/%lu",
+			  dir->i_ino, inode->i_ino);
+		err = -EPERM;
+		goto out_iput;
 	}
 
 	return d_splice_alias(inode, dentry);

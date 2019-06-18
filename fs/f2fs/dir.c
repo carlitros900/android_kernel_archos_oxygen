@@ -249,6 +249,12 @@ struct f2fs_dir_entry *f2fs_find_entry(struct inode *dir, struct qstr *child,
 		goto out;
 
 	max_depth = F2FS_I(dir)->i_current_depth;
+	if (unlikely(max_depth > MAX_DIR_HASH_DEPTH)) {
+		f2fs_warn(F2FS_I_SB(dir), "Corrupted max_depth of %lu: %u",
+			  dir->i_ino, max_depth);
+		max_depth = MAX_DIR_HASH_DEPTH;
+		f2fs_i_depth_write(dir, max_depth);
+	}
 
 	for (level = 0; level < max_depth; level++) {
 		de = find_in_level(dir, level, &fname, res_page, flags);
@@ -804,6 +810,17 @@ bool f2fs_fill_dentries(struct dir_context *ctx, struct f2fs_dentry_ptr *d,
 
 		de_name.name = d->filename[bit_pos];
 		de_name.len = le16_to_cpu(de->name_len);
+
+		/* check memory boundary before moving forward */
+		bit_pos += GET_DENTRY_SLOTS(le16_to_cpu(de->name_len));
+		if (unlikely(bit_pos > d->max ||
+				le16_to_cpu(de->name_len) > F2FS_NAME_LEN)) {
+			f2fs_warn(sbi, "%s: corrupted namelen=%d, run fsck to fix.",
+				  __func__, le16_to_cpu(de->name_len));
+			set_sbi_flag(sbi, SBI_NEED_FSCK);
+			err = -EINVAL;
+			goto out;
+		}
 
 		if (f2fs_encrypted_inode(d->inode)) {
 			int save_len = fstr->len;

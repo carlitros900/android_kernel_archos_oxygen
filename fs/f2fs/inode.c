@@ -94,6 +94,176 @@ static void __recover_inline_status(struct inode *inode, struct page *ipage)
 	return;
 }
 
+static bool f2fs_enable_inode_chksum(struct f2fs_sb_info *sbi, struct page *page)
+{
+	struct f2fs_inode *ri = &F2FS_NODE(page)->i;
+
+	if (!f2fs_sb_has_inode_chksum(sbi))
+		return false;
+
+	if (!IS_INODE(page) || !(ri->i_inline & F2FS_EXTRA_ATTR))
+		return false;
+
+	if (!F2FS_FITS_IN_INODE(ri, le16_to_cpu(ri->i_extra_isize),
+				i_inode_checksum))
+		return false;
+
+	return true;
+}
+
+static __u32 f2fs_inode_chksum(struct f2fs_sb_info *sbi, struct page *page)
+{
+	struct f2fs_node *node = F2FS_NODE(page);
+	struct f2fs_inode *ri = &node->i;
+	__le32 ino = node->footer.ino;
+	__le32 gen = ri->i_generation;
+	__u32 chksum, chksum_seed;
+	__u32 dummy_cs = 0;
+	unsigned int offset = offsetof(struct f2fs_inode, i_inode_checksum);
+	unsigned int cs_size = sizeof(dummy_cs);
+
+	chksum = f2fs_chksum(sbi, sbi->s_chksum_seed, (__u8 *)&ino,
+							sizeof(ino));
+	chksum_seed = f2fs_chksum(sbi, chksum, (__u8 *)&gen, sizeof(gen));
+
+	chksum = f2fs_chksum(sbi, chksum_seed, (__u8 *)ri, offset);
+	chksum = f2fs_chksum(sbi, chksum, (__u8 *)&dummy_cs, cs_size);
+	offset += cs_size;
+	chksum = f2fs_chksum(sbi, chksum, (__u8 *)ri + offset,
+						F2FS_BLKSIZE - offset);
+	return chksum;
+}
+
+bool f2fs_inode_chksum_verify(struct f2fs_sb_info *sbi, struct page *page)
+{
+	struct f2fs_inode *ri;
+	__u32 provided, calculated;
+
+	if (unlikely(is_sbi_flag_set(sbi, SBI_IS_SHUTDOWN)))
+		return true;
+
+#ifdef CONFIG_F2FS_CHECK_FS
+	if (!f2fs_enable_inode_chksum(sbi, page))
+#else
+	if (!f2fs_enable_inode_chksum(sbi, page) ||
+			PageDirty(page) || PageWriteback(page))
+#endif
+		return true;
+
+	ri = &F2FS_NODE(page)->i;
+	provided = le32_to_cpu(ri->i_inode_checksum);
+	calculated = f2fs_inode_chksum(sbi, page);
+
+	if (provided != calculated)
+		f2fs_warn(sbi, "checksum invalid, nid = %lu, ino_of_node = %x, %x vs. %x",
+			  page->index, ino_of_node(page), provided, calculated);
+
+	return provided == calculated;
+}
+
+void f2fs_inode_chksum_set(struct f2fs_sb_info *sbi, struct page *page)
+{
+	struct f2fs_inode *ri = &F2FS_NODE(page)->i;
+
+	if (!f2fs_enable_inode_chksum(sbi, page))
+		return;
+
+	ri->i_inode_checksum = cpu_to_le32(f2fs_inode_chksum(sbi, page));
+}
+
+static bool sanity_check_inode(struct inode *inode, struct page *node_page)
+{
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	struct f2fs_inode_info *fi = F2FS_I(inode);
+	unsigned long long iblocks;
+
+	iblocks = le64_to_cpu(F2FS_INODE(node_page)->i_blocks);
+	if (!iblocks) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "%s: corrupted inode i_blocks i_ino=%lx iblocks=%llu, run fsck to fix.",
+			  __func__, inode->i_ino, iblocks);
+		return false;
+	}
+
+	if (ino_of_node(node_page) != nid_of_node(node_page)) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "%s: corrupted inode footer i_ino=%lx, ino,nid: [%u, %u] run fsck to fix.",
+			  __func__, inode->i_ino,
+			  ino_of_node(node_page), nid_of_node(node_page));
+		return false;
+	}
+
+	if (f2fs_sb_has_flexible_inline_xattr(sbi)
+			&& !f2fs_has_extra_attr(inode)) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "%s: corrupted inode ino=%lx, run fsck to fix.",
+			  __func__, inode->i_ino);
+		return false;
+	}
+
+	if (f2fs_has_extra_attr(inode) &&
+			!f2fs_sb_has_extra_attr(sbi)) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "%s: inode (ino=%lx) is with extra_attr, but extra_attr feature is off",
+			  __func__, inode->i_ino);
+		return false;
+	}
+
+	if (fi->i_extra_isize > F2FS_TOTAL_EXTRA_ATTR_SIZE ||
+			fi->i_extra_isize % sizeof(__le32)) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "%s: inode (ino=%lx) has corrupted i_extra_isize: %d, max: %zu",
+			  __func__, inode->i_ino, fi->i_extra_isize,
+			  F2FS_TOTAL_EXTRA_ATTR_SIZE);
+		return false;
+	}
+
+	if (f2fs_has_extra_attr(inode) &&
+		f2fs_sb_has_flexible_inline_xattr(sbi) &&
+		f2fs_has_inline_xattr(inode) &&
+		(!fi->i_inline_xattr_size ||
+		fi->i_inline_xattr_size > MAX_INLINE_XATTR_SIZE)) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "%s: inode (ino=%lx) has corrupted i_inline_xattr_size: %d, max: %zu",
+			  __func__, inode->i_ino, fi->i_inline_xattr_size,
+			  MAX_INLINE_XATTR_SIZE);
+		return false;
+	}
+
+	if (F2FS_I(inode)->extent_tree) {
+		struct extent_info *ei = &F2FS_I(inode)->extent_tree->largest;
+
+		if (ei->len &&
+			(!f2fs_is_valid_blkaddr(sbi, ei->blk,
+						DATA_GENERIC_ENHANCE) ||
+			!f2fs_is_valid_blkaddr(sbi, ei->blk + ei->len - 1,
+						DATA_GENERIC_ENHANCE))) {
+			set_sbi_flag(sbi, SBI_NEED_FSCK);
+			f2fs_warn(sbi, "%s: inode (ino=%lx) extent info [%u, %u, %u] is incorrect, run fsck to fix",
+				  __func__, inode->i_ino,
+				  ei->blk, ei->fofs, ei->len);
+			return false;
+		}
+	}
+
+	if (f2fs_has_inline_data(inode) &&
+			(!S_ISREG(inode->i_mode) && !S_ISLNK(inode->i_mode))) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "%s: inode (ino=%lx, mode=%u) should not have inline_data, run fsck to fix",
+			  __func__, inode->i_ino, inode->i_mode);
+		return false;
+	}
+
+	if (f2fs_has_inline_dentry(inode) && !S_ISDIR(inode->i_mode)) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "%s: inode (ino=%lx, mode=%u) should not have inline_dentry, run fsck to fix",
+			  __func__, inode->i_ino, inode->i_mode);
+		return false;
+	}
+
+	return true;
+}
+
 static int do_read_inode(struct inode *inode)
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
@@ -419,10 +589,24 @@ void handle_failed_inode(struct inode *inode)
 	 * so we can prevent losing this orphan when encoutering checkpoint
 	 * and following suddenly power-off.
 	 */
-	if (err && err != -ENOENT) {
-		err = acquire_orphan_inode(sbi);
-		if (!err)
-			add_orphan_inode(sbi, inode->i_ino);
+	err = f2fs_get_node_info(sbi, inode->i_ino, &ni);
+	if (err) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "May loss orphan inode, run fsck to fix.");
+		goto out;
+	}
+
+	if (ni.blk_addr != NULL_ADDR) {
+		err = f2fs_acquire_orphan_inode(sbi);
+		if (err) {
+			set_sbi_flag(sbi, SBI_NEED_FSCK);
+			f2fs_warn(sbi, "Too many orphan inodes, run fsck to fix.");
+		} else {
+			f2fs_add_orphan_inode(inode);
+		}
+		f2fs_alloc_nid_done(sbi, inode->i_ino);
+	} else {
+		set_inode_flag(inode, FI_FREE_NID);
 	}
 
 	set_inode_flag(F2FS_I(inode), FI_FREE_NID);

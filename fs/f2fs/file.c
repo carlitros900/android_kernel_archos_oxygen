@@ -1506,7 +1506,26 @@ static int f2fs_ioc_start_atomic_write(struct file *filp)
 
 	ret = f2fs_convert_inline_inode(inode);
 	if (ret)
-		return ret;
+		goto out;
+
+	down_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
+
+	/*
+	 * Should wait end_io to count F2FS_WB_CP_DATA correctly by
+	 * f2fs_is_atomic_file.
+	 */
+	if (get_dirty_pages(inode))
+		f2fs_warn(F2FS_I_SB(inode), "Unexpected flush for atomic writes: ino=%lu, npages=%u",
+			  inode->i_ino, get_dirty_pages(inode));
+	ret = filemap_write_and_wait_range(inode->i_mapping, 0, LLONG_MAX);
+	if (ret) {
+		up_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
+		goto out;
+	}
+
+	set_inode_flag(inode, FI_ATOMIC_FILE);
+	clear_inode_flag(inode, FI_ATOMIC_REVOKE_REQUEST);
+	up_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 
 	set_inode_flag(F2FS_I(inode), FI_ATOMIC_FILE);
 	return 0;
@@ -1746,6 +1765,284 @@ static int f2fs_ioc_get_encryption_pwsalt(struct file *filp, unsigned long arg)
 got_it:
 	if (copy_to_user((__u8 __user *)arg, sbi->raw_super->encrypt_pw_salt,
 									16))
+		err = -EFAULT;
+out_err:
+	up_write(&sbi->sb_lock);
+	mnt_drop_write_file(filp);
+	return err;
+}
+
+static int f2fs_ioc_gc(struct file *filp, unsigned long arg)
+{
+	struct inode *inode = file_inode(filp);
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	__u32 sync;
+	int ret;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (get_user(sync, (__u32 __user *)arg))
+		return -EFAULT;
+
+	if (f2fs_readonly(sbi->sb))
+		return -EROFS;
+
+	ret = mnt_want_write_file(filp);
+	if (ret)
+		return ret;
+
+	if (!sync) {
+		if (!mutex_trylock(&sbi->gc_mutex)) {
+			ret = -EBUSY;
+			goto out;
+		}
+	} else {
+		mutex_lock(&sbi->gc_mutex);
+	}
+
+	ret = f2fs_gc(sbi, sync, true, NULL_SEGNO);
+out:
+	mnt_drop_write_file(filp);
+	return ret;
+}
+
+static int f2fs_ioc_gc_range(struct file *filp, unsigned long arg)
+{
+	struct inode *inode = file_inode(filp);
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	struct f2fs_gc_range range;
+	u64 end;
+	int ret;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (copy_from_user(&range, (struct f2fs_gc_range __user *)arg,
+							sizeof(range)))
+		return -EFAULT;
+
+	if (f2fs_readonly(sbi->sb))
+		return -EROFS;
+
+	end = range.start + range.len;
+	if (range.start < MAIN_BLKADDR(sbi) || end >= MAX_BLKADDR(sbi)) {
+		return -EINVAL;
+	}
+
+	ret = mnt_want_write_file(filp);
+	if (ret)
+		return ret;
+
+do_more:
+	if (!range.sync) {
+		if (!mutex_trylock(&sbi->gc_mutex)) {
+			ret = -EBUSY;
+			goto out;
+		}
+	} else {
+		mutex_lock(&sbi->gc_mutex);
+	}
+
+	ret = f2fs_gc(sbi, range.sync, true, GET_SEGNO(sbi, range.start));
+	range.start += BLKS_PER_SEC(sbi);
+	if (range.start <= end)
+		goto do_more;
+out:
+	mnt_drop_write_file(filp);
+	return ret;
+}
+
+static int f2fs_ioc_write_checkpoint(struct file *filp, unsigned long arg)
+{
+	struct inode *inode = file_inode(filp);
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	int ret;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (f2fs_readonly(sbi->sb))
+		return -EROFS;
+
+	if (unlikely(is_sbi_flag_set(sbi, SBI_CP_DISABLED))) {
+		f2fs_info(sbi, "Skipping Checkpoint. Checkpoints currently disabled.");
+		return -EINVAL;
+	}
+
+	ret = mnt_want_write_file(filp);
+	if (ret)
+		return ret;
+
+	ret = f2fs_sync_fs(sbi->sb, 1);
+
+	mnt_drop_write_file(filp);
+	return ret;
+}
+
+static int f2fs_defragment_range(struct f2fs_sb_info *sbi,
+					struct file *filp,
+					struct f2fs_defragment *range)
+{
+	struct inode *inode = file_inode(filp);
+	struct f2fs_map_blocks map = { .m_next_extent = NULL,
+					.m_seg_type = NO_CHECK_TYPE };
+	struct extent_info ei = {0, 0, 0};
+	pgoff_t pg_start, pg_end, next_pgofs;
+	unsigned int blk_per_seg = sbi->blocks_per_seg;
+	unsigned int total = 0, sec_num;
+	block_t blk_end = 0;
+	bool fragmented = false;
+	int err;
+
+	/* if in-place-update policy is enabled, don't waste time here */
+	if (f2fs_should_update_inplace(inode, NULL))
+		return -EINVAL;
+
+	pg_start = range->start >> PAGE_SHIFT;
+	pg_end = (range->start + range->len) >> PAGE_SHIFT;
+
+	f2fs_balance_fs(sbi, true);
+
+	inode_lock(inode);
+
+	/* writeback all dirty pages in the range */
+	err = filemap_write_and_wait_range(inode->i_mapping, range->start,
+						range->start + range->len - 1);
+	if (err)
+		goto out;
+
+	/*
+	 * lookup mapping info in extent cache, skip defragmenting if physical
+	 * block addresses are continuous.
+	 */
+	if (f2fs_lookup_extent_cache(inode, pg_start, &ei)) {
+		if (ei.fofs + ei.len >= pg_end)
+			goto out;
+	}
+
+	map.m_lblk = pg_start;
+	map.m_next_pgofs = &next_pgofs;
+
+	/*
+	 * lookup mapping info in dnode page cache, skip defragmenting if all
+	 * physical block addresses are continuous even if there are hole(s)
+	 * in logical blocks.
+	 */
+	while (map.m_lblk < pg_end) {
+		map.m_len = pg_end - map.m_lblk;
+		err = f2fs_map_blocks(inode, &map, 0, F2FS_GET_BLOCK_DEFAULT);
+		if (err)
+			goto out;
+
+		if (!(map.m_flags & F2FS_MAP_FLAGS)) {
+			map.m_lblk = next_pgofs;
+			continue;
+		}
+
+		if (blk_end && blk_end != map.m_pblk)
+			fragmented = true;
+
+		/* record total count of block that we're going to move */
+		total += map.m_len;
+
+		blk_end = map.m_pblk + map.m_len;
+
+		map.m_lblk += map.m_len;
+	}
+
+	if (!fragmented)
+		goto out;
+
+	sec_num = (total + BLKS_PER_SEC(sbi) - 1) / BLKS_PER_SEC(sbi);
+
+	/*
+	 * make sure there are enough free section for LFS allocation, this can
+	 * avoid defragment running in SSR mode when free section are allocated
+	 * intensively
+	 */
+	if (has_not_enough_free_secs(sbi, 0, sec_num)) {
+		err = -EAGAIN;
+		goto out;
+	}
+
+	map.m_lblk = pg_start;
+	map.m_len = pg_end - pg_start;
+	total = 0;
+
+	while (map.m_lblk < pg_end) {
+		pgoff_t idx;
+		int cnt = 0;
+
+do_map:
+		map.m_len = pg_end - map.m_lblk;
+		err = f2fs_map_blocks(inode, &map, 0, F2FS_GET_BLOCK_DEFAULT);
+		if (err)
+			goto clear_out;
+
+		if (!(map.m_flags & F2FS_MAP_FLAGS)) {
+			map.m_lblk = next_pgofs;
+			continue;
+		}
+
+		set_inode_flag(inode, FI_DO_DEFRAG);
+
+		idx = map.m_lblk;
+		while (idx < map.m_lblk + map.m_len && cnt < blk_per_seg) {
+			struct page *page;
+
+			page = f2fs_get_lock_data_page(inode, idx, true);
+			if (IS_ERR(page)) {
+				err = PTR_ERR(page);
+				goto clear_out;
+			}
+
+			set_page_dirty(page);
+			f2fs_put_page(page, 1);
+
+			idx++;
+			cnt++;
+			total++;
+		}
+
+		map.m_lblk = idx;
+
+		if (idx < pg_end && cnt < blk_per_seg)
+			goto do_map;
+
+		clear_inode_flag(inode, FI_DO_DEFRAG);
+
+		err = filemap_fdatawrite(inode->i_mapping);
+		if (err)
+			goto out;
+	}
+clear_out:
+	clear_inode_flag(inode, FI_DO_DEFRAG);
+out:
+	inode_unlock(inode);
+	if (!err)
+		range->len = (u64)total << PAGE_SHIFT;
+	return err;
+}
+
+static int f2fs_ioc_defragment(struct file *filp, unsigned long arg)
+{
+	struct inode *inode = file_inode(filp);
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	struct f2fs_defragment range;
+	int err;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (!S_ISREG(inode->i_mode) || f2fs_is_atomic_file(inode))
+		return -EINVAL;
+
+	if (f2fs_readonly(sbi->sb))
+		return -EROFS;
+
+	if (copy_from_user(&range, (struct f2fs_defragment __user *)arg,
+							sizeof(range)))
 		return -EFAULT;
 	return 0;
 }
@@ -1762,7 +2059,10 @@ static int f2fs_ioc_gc(struct file *filp, unsigned long arg)
 	if (get_user(count, (__u32 __user *)arg))
 		return -EFAULT;
 
-	if (!count || count > F2FS_BATCH_GC_MAX_NUM)
+	if (!f2fs_is_multi_device(sbi) || sbi->s_ndevs - 1 <= range.dev_num ||
+			__is_large_section(sbi)) {
+		f2fs_warn(sbi, "Can't flush %u in %d for segs_per_sec %u != 1",
+			  range.dev_num, sbi->s_ndevs, sbi->segs_per_sec);
 		return -EINVAL;
 
 	if (is_sbi_flag_set(sbi, SBI_NO_GC))
@@ -1772,8 +2072,28 @@ static int f2fs_ioc_gc(struct file *filp, unsigned long arg)
 		if (!mutex_trylock(&sbi->gc_mutex))
 			break;
 
-		if (f2fs_gc(sbi))
-			break;
+	/* Must validate to set it with SQLite behavior in Android. */
+	sb_feature |= F2FS_FEATURE_ATOMIC_WRITE;
+
+	return put_user(sb_feature, (u32 __user *)arg);
+}
+
+int f2fs_pin_file_control(struct inode *inode, bool inc)
+{
+	struct f2fs_inode_info *fi = F2FS_I(inode);
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+
+	/* Use i_gc_failures for normal file as a risk signal. */
+	if (inc)
+		f2fs_i_gc_failures_write(inode,
+				fi->i_gc_failures[GC_FAILURE_PIN] + 1);
+
+	if (fi->i_gc_failures[GC_FAILURE_PIN] > sbi->gc_pin_file_threshold) {
+		f2fs_warn(sbi, "%s: Enable GC = ino %lx after %x GC trials",
+			  __func__, inode->i_ino,
+			  fi->i_gc_failures[GC_FAILURE_PIN]);
+		clear_inode_flag(inode, FI_PIN_FILE);
+		return -EAGAIN;
 	}
 
 	if (put_user(i, (__u32 __user *)arg))
