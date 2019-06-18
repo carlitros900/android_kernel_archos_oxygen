@@ -2543,6 +2543,23 @@ void write_data_page(struct dnode_of_data *dn, struct f2fs_io_info *fio)
 
 void rewrite_data_page(struct f2fs_io_info *fio)
 {
+	int err;
+	struct f2fs_sb_info *sbi = fio->sbi;
+	unsigned int segno;
+
+	fio->new_blkaddr = fio->old_blkaddr;
+	/* i/o temperature is needed for passing down write hints */
+	__get_segment_type(fio);
+
+	segno = GET_SEGNO(sbi, fio->new_blkaddr);
+
+	if (!IS_DATASEG(get_seg_entry(sbi, segno)->type)) {
+		set_sbi_flag(sbi, SBI_NEED_FSCK);
+		f2fs_warn(sbi, "%s: incorrect segment(%u) type, run fsck to fix.",
+			  __func__, segno);
+		return -EFAULT;
+	}
+
 	stat_inc_inplace_blocks(fio->sbi);
 
 	if (fio->bio)
