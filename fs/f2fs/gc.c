@@ -1188,8 +1188,8 @@ static int free_segment_range(struct f2fs_sb_info *sbi, unsigned int start,
 
 	next_inuse = find_next_inuse(FREE_I(sbi), end + 1, start);
 	if (next_inuse <= end) {
-		f2fs_msg(sbi->sb, KERN_ERR,
-			"segno %u should be free but still inuse!", next_inuse);
+		f2fs_err(sbi, "segno %u should be free but still inuse!",
+			 next_inuse);
 		f2fs_bug_on(sbi, 1);
 	}
 	return err;
@@ -1246,14 +1246,12 @@ int f2fs_resize_fs(struct f2fs_sb_info *sbi, __u64 block_count)
 		return 0;
 
 	if (is_sbi_flag_set(sbi, SBI_NEED_FSCK)) {
-		f2fs_msg(sbi->sb, KERN_ERR,
-			"Should run fsck to repair first.");
+		f2fs_err(sbi, "Should run fsck to repair first.");
 		return -EINVAL;
 	}
 
 	if (test_opt(sbi, DISABLE_CHECKPOINT)) {
-		f2fs_msg(sbi->sb, KERN_ERR,
-			"Checkpoint should be enabled.");
+		f2fs_err(sbi, "Checkpoint should be enabled.");
 		return -EINVAL;
 	}
 
@@ -1317,8 +1315,7 @@ int f2fs_resize_fs(struct f2fs_sb_info *sbi, __u64 block_count)
 out:
 	if (err) {
 		set_sbi_flag(sbi, SBI_NEED_FSCK);
-		f2fs_msg(sbi->sb, KERN_ERR,
-				"resize_fs failed, should run fsck to repair!");
+		f2fs_err(sbi, "resize_fs failed, should run fsck to repair!");
 
 		MAIN_SECS(sbi) += secs;
 		spin_lock(&sbi->stat_lock);

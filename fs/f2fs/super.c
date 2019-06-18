@@ -2128,13 +2128,6 @@ static int sanity_check_raw_super(struct super_block *sb,
 		return 1;
 	}
 
-	if (le32_to_cpu(raw_super->segment_count) > F2FS_MAX_SEGMENT) {
-		f2fs_msg(sb, KERN_INFO,
-			"Invalid segment count (%u)",
-			le32_to_cpu(raw_super->segment_count));
-		return 1;
-	}
-
 	/* check CP/SIT/NAT/SSA/MAIN_AREA area boundary */
 	if (sanity_check_area_boundary(sb, raw_super))
 		return 1;
@@ -2266,19 +2259,8 @@ static int sanity_check_ckpt(struct f2fs_sb_info *sbi)
 
 	if (__is_set_ckpt_flags(ckpt, CP_LARGE_NAT_BITMAP_FLAG) &&
 		le32_to_cpu(ckpt->checksum_offset) != CP_MIN_CHKSUM_OFFSET) {
-		f2fs_warn(sbi, "using deprecated layout of large_nat_bitmap, "
-			  "please run fsck v1.13.0 or higher to repair, chksum_offset: %u, "
-			  "fixed with patch: \"f2fs-tools: relocate chksum_offset for large_nat_bitmap feature\"",
+		f2fs_warn(sbi, "layout of large_nat_bitmap is deprecated, run fsck to repair, chksum_offset: %u",
 			  le32_to_cpu(ckpt->checksum_offset));
-		return 1;
-	}
-
-	if (__is_set_ckpt_flags(ckpt, CP_LARGE_NAT_BITMAP_FLAG) &&
-		le32_to_cpu(ckpt->checksum_offset) != CP_MIN_CHKSUM_OFFSET) {
-		f2fs_msg(sbi->sb, KERN_WARNING,
-			"layout of large_nat_bitmap is deprecated, "
-			"run fsck to repair, chksum_offset: %u",
-			le32_to_cpu(ckpt->checksum_offset));
 		return 1;
 	}
 
@@ -2355,7 +2337,7 @@ static int read_raw_super_block(struct super_block *sb,
 		if (sanity_check_raw_super(sbi, bh)) {
 			f2fs_err(sbi, "Can't find valid F2FS filesystem in %dth superblock",
 				 block + 1);
-			err = -EFSCORRUPTED;
+			err = -EINVAL;
 			brelse(bh);
 			continue;
 		}
@@ -2708,14 +2690,14 @@ try_onemore:
 	/* setup f2fs internal modules */
 	err = build_segment_manager(sbi);
 	if (err) {
-		f2fs_msg(sb, KERN_ERR,
-			"Failed to initialize F2FS segment manager (%d)", err);
+		f2fs_err(sbi, "Failed to initialize F2FS segment manager (%d)",
+			 err);
 		goto free_sm;
 	}
 	err = build_node_manager(sbi);
 	if (err) {
-		f2fs_msg(sb, KERN_ERR,
-			"Failed to initialize F2FS node manager (%d)", err);
+		f2fs_err(sbi, "Failed to initialize F2FS node manager (%d)",
+			 err);
 		goto free_nm;
 	}
 
