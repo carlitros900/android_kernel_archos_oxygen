@@ -308,10 +308,25 @@ struct f2fs_filename {
 #endif
 };
 
-#define FSTR_INIT(n, l)		{ .name = n, .len = l }
-#define FSTR_TO_QSTR(f)		QSTR_INIT((f)->name, (f)->len)
-#define fname_name(p)		((p)->disk_name.name)
-#define fname_len(p)		((p)->disk_name.len)
+/* for inline stuff */
+#define DEF_INLINE_RESERVED_SIZE	1
+static inline int get_extra_isize(struct inode *inode);
+static inline int get_inline_xattr_addrs(struct inode *inode);
+#define MAX_INLINE_DATA(inode)	(sizeof(__le32) *			\
+				(CUR_ADDRS_PER_INODE(inode) -		\
+				get_inline_xattr_addrs(inode) -	\
+				DEF_INLINE_RESERVED_SIZE))
+
+/* for inline dir */
+#define NR_INLINE_DENTRY(inode)	(MAX_INLINE_DATA(inode) * BITS_PER_BYTE / \
+				((SIZE_OF_DIR_ENTRY + F2FS_SLOT_LEN) * \
+				BITS_PER_BYTE + 1))
+#define INLINE_DENTRY_BITMAP_SIZE(inode) \
+	DIV_ROUND_UP(NR_INLINE_DENTRY(inode), BITS_PER_BYTE)
+#define INLINE_RESERVED_SIZE(inode)	(MAX_INLINE_DATA(inode) - \
+				((SIZE_OF_DIR_ENTRY + F2FS_SLOT_LEN) * \
+				NR_INLINE_DENTRY(inode) + \
+				INLINE_DENTRY_BITMAP_SIZE(inode)))
 
 struct f2fs_dentry_ptr {
 	struct inode *inode;

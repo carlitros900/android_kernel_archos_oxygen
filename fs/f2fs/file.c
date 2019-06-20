@@ -937,7 +937,32 @@ static int f2fs_do_collapse(struct inode *inode, pgoff_t start, pgoff_t end)
 		f2fs_unlock_op(sbi);
 	}
 	return 0;
-out:
+
+roll_back:
+	__roll_back_blkaddrs(src_inode, src_blkaddr, do_replace, src, olen);
+	kvfree(src_blkaddr);
+	kvfree(do_replace);
+	return ret;
+}
+
+static int f2fs_do_collapse(struct inode *inode, loff_t offset, loff_t len)
+{
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	pgoff_t nrpages = DIV_ROUND_UP(i_size_read(inode), PAGE_SIZE);
+	pgoff_t start = offset >> PAGE_SHIFT;
+	pgoff_t end = (offset + len) >> PAGE_SHIFT;
+	int ret;
+
+	f2fs_balance_fs(sbi, true);
+
+	/* avoid gc operation during block exchange */
+	down_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
+	down_write(&F2FS_I(inode)->i_mmap_sem);
+
+	f2fs_lock_op(sbi);
+	f2fs_drop_extent_tree(inode);
+	truncate_pagecache(inode, offset);
+	ret = __exchange_data_block(inode, inode, end, start, nrpages - end, true);
 	f2fs_unlock_op(sbi);
 	return ret;
 }
@@ -1130,6 +1155,14 @@ static int f2fs_insert_range(struct inode *inode, loff_t offset, loff_t len)
 	if (ret)
 		return ret;
 
+	pg_start = offset >> PAGE_SHIFT;
+	pg_end = (offset + len) >> PAGE_SHIFT;
+	delta = pg_end - pg_start;
+	idx = DIV_ROUND_UP(i_size_read(inode), PAGE_SIZE);
+
+	/* avoid gc operation during block exchange */
+	down_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
+	down_write(&F2FS_I(inode)->i_mmap_sem);
 	truncate_pagecache(inode, offset);
 
 	pg_start = offset >> PAGE_CACHE_SHIFT;
@@ -1954,7 +1987,7 @@ static int f2fs_defragment_range(struct f2fs_sb_info *sbi,
 	if (!fragmented)
 		goto out;
 
-	sec_num = (total + BLKS_PER_SEC(sbi) - 1) / BLKS_PER_SEC(sbi);
+	sec_num = DIV_ROUND_UP(total, BLKS_PER_SEC(sbi));
 
 	/*
 	 * make sure there are enough free section for LFS allocation, this can
