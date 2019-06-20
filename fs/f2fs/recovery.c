@@ -407,15 +407,27 @@ static int do_recover_data(struct f2fs_sb_info *sbi, struct inode *inode,
 		f2fs_warn(sbi, "Inconsistent ofs_of_node, ino:%lu, ofs:%u, %u",
 			  inode->i_ino, ofs_of_node(dn.node_page),
 			  ofs_of_node(page));
-		err = -EFAULT;
+		err = -EFSCORRUPTED;
 		goto err;
 	}
 
 	for (; start < end; start++, dn.ofs_in_node++) {
 		block_t src, dest;
 
-		src = datablock_addr(dn.node_page, dn.ofs_in_node);
-		dest = datablock_addr(page, dn.ofs_in_node);
+		src = datablock_addr(dn.inode, dn.node_page, dn.ofs_in_node);
+		dest = datablock_addr(dn.inode, page, dn.ofs_in_node);
+
+		if (__is_valid_data_blkaddr(src) &&
+			!f2fs_is_valid_blkaddr(sbi, src, META_POR)) {
+			err = -EFSCORRUPTED;
+			goto err;
+		}
+
+		if (__is_valid_data_blkaddr(dest) &&
+			!f2fs_is_valid_blkaddr(sbi, dest, META_POR)) {
+			err = -EFSCORRUPTED;
+			goto err;
+		}
 
 		/* skip recovering if dest is the same as src */
 		if (src == dest)

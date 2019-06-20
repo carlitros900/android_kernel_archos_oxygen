@@ -863,8 +863,56 @@ static int f2fs_do_collapse(struct inode *inode, pgoff_t start, pgoff_t end)
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
 	struct dnode_of_data dn;
-	pgoff_t nrpages = (i_size_read(inode) + PAGE_SIZE - 1) / PAGE_SIZE;
-	int ret = 0;
+	int ret, done, i;
+
+next_dnode:
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	ret = f2fs_get_dnode_of_data(&dn, off, LOOKUP_NODE_RA);
+	if (ret && ret != -ENOENT) {
+		return ret;
+	} else if (ret == -ENOENT) {
+		if (dn.max_level == 0)
+			return -ENOENT;
+		done = min((pgoff_t)ADDRS_PER_BLOCK(inode) - dn.ofs_in_node,
+									len);
+		blkaddr += done;
+		do_replace += done;
+		goto next;
+	}
+
+	done = min((pgoff_t)ADDRS_PER_PAGE(dn.node_page, inode) -
+							dn.ofs_in_node, len);
+	for (i = 0; i < done; i++, blkaddr++, do_replace++, dn.ofs_in_node++) {
+		*blkaddr = datablock_addr(dn.inode,
+					dn.node_page, dn.ofs_in_node);
+
+		if (__is_valid_data_blkaddr(*blkaddr) &&
+			!f2fs_is_valid_blkaddr(sbi, *blkaddr,
+					DATA_GENERIC_ENHANCE)) {
+			f2fs_put_dnode(&dn);
+			return -EFSCORRUPTED;
+		}
+
+		if (!f2fs_is_checkpointed_data(sbi, *blkaddr)) {
+
+			if (test_opt(sbi, LFS)) {
+				f2fs_put_dnode(&dn);
+				return -ENOTSUPP;
+			}
+
+			/* do not invalidate this block address */
+			f2fs_update_data_blkaddr(&dn, NULL_ADDR);
+			*do_replace = 1;
+		}
+	}
+	f2fs_put_dnode(&dn);
+next:
+	len -= done;
+	off += done;
+	if (len)
+		goto next_dnode;
+	return 0;
+}
 
 	for (; end < nrpages; start++, end++) {
 		block_t new_addr, old_addr;

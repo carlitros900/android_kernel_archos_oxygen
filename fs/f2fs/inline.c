@@ -133,7 +133,7 @@ int f2fs_convert_inline_page(struct dnode_of_data *dn, struct page *page)
 		set_sbi_flag(fio.sbi, SBI_NEED_FSCK);
 		f2fs_warn(fio.sbi, "%s: corrupted inline inode ino=%lx, i_addr[0]:0x%x, run fsck to fix.",
 			  __func__, dn->inode->i_ino, dn->data_blkaddr);
-		return -EINVAL;
+		return -EFSCORRUPTED;
 	}
 
 	zero_user_segment(page, MAX_INLINE_DATA, PAGE_CACHE_SIZE);
@@ -396,7 +396,7 @@ static int f2fs_convert_inline_dir(struct inode *dir, struct page *ipage,
 		set_sbi_flag(F2FS_P_SB(page), SBI_NEED_FSCK);
 		f2fs_warn(F2FS_P_SB(page), "%s: corrupted inline inode ino=%lx, i_addr[0]:0x%x, run fsck to fix.",
 			  __func__, dir->i_ino, dn.data_blkaddr);
-		err = -EINVAL;
+		err = -EFSCORRUPTED;
 		goto out;
 	}
 
