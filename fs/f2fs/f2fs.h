@@ -961,7 +961,7 @@ static inline struct f2fs_sb_info *F2FS_M_SB(struct address_space *mapping)
 
 static inline struct f2fs_sb_info *F2FS_P_SB(struct page *page)
 {
-	return F2FS_M_SB(page->mapping);
+	return F2FS_M_SB(page_file_mapping(page));
 }
 
 static inline struct f2fs_super_block *F2FS_RAW_SUPER(struct f2fs_sb_info *sbi)
@@ -2564,9 +2564,21 @@ static inline void f2fs_restore_control_page(struct page *p) { }
 static inline int __init f2fs_init_crypto(void) { return 0; }
 static inline void f2fs_exit_crypto(void) { }
 
-static inline int f2fs_has_encryption_key(struct inode *i) { return 0; }
-static inline int f2fs_get_encryption_info(struct inode *i) { return 0; }
-static inline void f2fs_fname_crypto_free_buffer(struct f2fs_str *p) { }
+	if (f2fs_post_read_required(inode))
+		return true;
+	if (f2fs_is_multi_device(sbi))
+		return true;
+	/*
+	 * for blkzoned device, fallback direct IO to buffered IO, so
+	 * all IOs can be serialized by log-structured write.
+	 */
+	if (f2fs_sb_has_blkzoned(sbi))
+		return true;
+	if (test_opt(sbi, LFS) && (rw == WRITE))
+		return true;
+	if (is_sbi_flag_set(F2FS_I_SB(inode), SBI_CP_DISABLED) &&
+					!(inode->i_flags & S_SWAPFILE))
+		return true;
 
 static inline int f2fs_fname_setup_filename(struct inode *dir,
 					const struct qstr *iname,
