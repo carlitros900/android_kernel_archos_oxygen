@@ -2183,8 +2183,16 @@ int f2fs_pin_file_control(struct inode *inode, bool inc)
 		clear_inode_flag(inode, FI_PIN_FILE);
 		return -EAGAIN;
 	}
+	return 0;
+}
 
-	if (put_user(i, (__u32 __user *)arg))
+static int f2fs_ioc_set_pin_file(struct file *filp, unsigned long arg)
+{
+	struct inode *inode = file_inode(filp);
+	__u32 pin;
+	int ret = 0;
+
+	if (get_user(pin, (__u32 __user *)arg))
 		return -EFAULT;
 
 	return 0;
