@@ -664,24 +664,50 @@ static int move_data_block(struct inode *inode, block_t bidx,
 	fio.page = page;
 	fio.blk_addr = dn.data_blkaddr;
 
-	fio.encrypted_page = pagecache_get_page(META_MAPPING(fio.sbi),
-					fio.blk_addr,
-					FGP_LOCK|FGP_CREAT,
-					GFP_NOFS);
-	if (!fio.encrypted_page)
-		goto put_out;
+	if (lfs_mode)
+		down_write(&fio.sbi->io_order_lock);
 
-	err = f2fs_submit_page_bio(&fio);
-	if (err)
-		goto put_page_out;
+	mpage = f2fs_grab_cache_page(META_MAPPING(fio.sbi),
+					fio.old_blkaddr, false);
+	if (!mpage)
+		goto up_out;
 
-	/* write page */
-	lock_page(fio.encrypted_page);
+	fio.encrypted_page = mpage;
 
-	if (unlikely(!PageUptodate(fio.encrypted_page)))
-		goto put_page_out;
-	if (unlikely(fio.encrypted_page->mapping != META_MAPPING(fio.sbi)))
-		goto put_page_out;
+	/* read source block in mpage */
+	if (!PageUptodate(mpage)) {
+		err = f2fs_submit_page_bio(&fio);
+		if (err) {
+			f2fs_put_page(mpage, 1);
+			goto up_out;
+		}
+		lock_page(mpage);
+		if (unlikely(mpage->mapping != META_MAPPING(fio.sbi) ||
+						!PageUptodate(mpage))) {
+			err = -EIO;
+			f2fs_put_page(mpage, 1);
+			goto up_out;
+		}
+	}
+
+	f2fs_allocate_data_block(fio.sbi, NULL, fio.old_blkaddr, &newaddr,
+					&sum, CURSEG_COLD_DATA, NULL, false);
+
+	fio.encrypted_page = f2fs_pagecache_get_page(META_MAPPING(fio.sbi),
+				newaddr, FGP_LOCK | FGP_CREAT, GFP_NOFS);
+	if (!fio.encrypted_page) {
+		err = -ENOMEM;
+		f2fs_put_page(mpage, 1);
+		goto recover_block;
+	}
+
+	/* write target block */
+	f2fs_wait_on_page_writeback(fio.encrypted_page, DATA, true, true);
+	memcpy(page_address(fio.encrypted_page),
+				page_address(mpage), PAGE_SIZE);
+	f2fs_put_page(mpage, 1);
+	invalidate_mapping_pages(META_MAPPING(fio.sbi),
+				fio.old_blkaddr, fio.old_blkaddr);
 
 	set_page_dirty(fio.encrypted_page);
 	f2fs_wait_on_page_writeback(fio.encrypted_page, META);
@@ -705,6 +731,13 @@ static int move_data_block(struct inode *inode, block_t bidx,
 		set_inode_flag(F2FS_I(inode), FI_FIRST_BLOCK_WRITTEN);
 put_page_out:
 	f2fs_put_page(fio.encrypted_page, 1);
+recover_block:
+	if (err)
+		f2fs_do_replace_block(fio.sbi, &sum, newaddr, fio.old_blkaddr,
+								true, true);
+up_out:
+	if (lfs_mode)
+		up_write(&fio.sbi->io_order_lock);
 put_out:
 	f2fs_put_dnode(&dn);
 out:
