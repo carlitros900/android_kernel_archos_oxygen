@@ -345,8 +345,62 @@ alloc_new:
 	return 0;
 }
 
+int f2fs_merge_page_bio(struct f2fs_io_info *fio)
+{
+	struct bio *bio = *fio->bio;
+	struct page *page = fio->encrypted_page ?
+			fio->encrypted_page : fio->page;
+
+	if (!f2fs_is_valid_blkaddr(fio->sbi, fio->new_blkaddr,
+			__is_meta_io(fio) ? META_GENERIC : DATA_GENERIC))
+		return -EFSCORRUPTED;
+
+	trace_f2fs_submit_page_bio(page, fio);
+	f2fs_trace_ios(fio, 0);
+
+	if (bio && (*fio->last_block + 1 != fio->new_blkaddr ||
+			!__same_bdev(fio->sbi, fio->new_blkaddr, bio))) {
+		__submit_bio(fio->sbi, bio, fio->type);
+		bio = NULL;
+	}
+alloc_new:
+	if (!bio) {
+		bio = __bio_alloc(fio->sbi, fio->new_blkaddr, fio->io_wbc,
+				BIO_MAX_PAGES, false, fio->type, fio->temp);
+		bio_set_op_attrs(bio, fio->op, fio->op_flags);
+	}
+
+	if (bio_add_page(bio, page, PAGE_SIZE, 0) < PAGE_SIZE) {
+		__submit_bio(fio->sbi, bio, fio->type);
+		bio = NULL;
+		goto alloc_new;
+	}
+
+	if (fio->io_wbc)
+		wbc_account_io(fio->io_wbc, page, PAGE_SIZE);
+
+	inc_page_count(fio->sbi, WB_DATA_TYPE(page));
+
+	*fio->last_block = fio->new_blkaddr;
+	*fio->bio = bio;
+
+	return 0;
+}
+
 static void f2fs_submit_ipu_bio(struct f2fs_sb_info *sbi, struct bio **bio,
 							struct page *page)
+{
+	if (!bio)
+		return;
+
+	if (!__has_merged_page(*bio, NULL, page, 0))
+		return;
+
+	__submit_bio(sbi, *bio, DATA);
+	*bio = NULL;
+}
+
+void f2fs_submit_page_write(struct f2fs_io_info *fio)
 {
 	if (!bio)
 		return;
@@ -1477,6 +1531,120 @@ got_it:
 		goto out_writepage;
 	}
 	/*
+	 * IPU for rewrite async pages
+	 */
+	if (policy & (0x1 << F2FS_IPU_ASYNC) &&
+			fio && fio->op == REQ_OP_WRITE &&
+			!(fio->op_flags & REQ_SYNC) &&
+			!f2fs_encrypted_inode(inode))
+		return true;
+
+	/* this is only set during fdatasync */
+	if (policy & (0x1 << F2FS_IPU_FSYNC) &&
+			is_inode_flag_set(inode, FI_NEED_IPU))
+		return true;
+
+	if (unlikely(fio && is_sbi_flag_set(sbi, SBI_CP_DISABLED) &&
+			!f2fs_is_checkpointed_data(sbi, fio->old_blkaddr)))
+		return true;
+
+	return false;
+}
+
+bool f2fs_should_update_inplace(struct inode *inode, struct f2fs_io_info *fio)
+{
+	if (f2fs_is_pinned_file(inode))
+		return true;
+
+	/* if this is cold file, we should overwrite to avoid fragmentation */
+	if (file_is_cold(inode))
+		return true;
+
+	return check_inplace_update_policy(inode, fio);
+}
+
+bool f2fs_should_update_outplace(struct inode *inode, struct f2fs_io_info *fio)
+{
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+
+	if (test_opt(sbi, LFS))
+		return true;
+	if (S_ISDIR(inode->i_mode))
+		return true;
+	if (IS_NOQUOTA(inode))
+		return true;
+	if (f2fs_is_atomic_file(inode))
+		return true;
+	if (fio) {
+		if (is_cold_data(fio->page))
+			return true;
+		if (IS_ATOMIC_WRITTEN_PAGE(fio->page))
+			return true;
+		if (unlikely(is_sbi_flag_set(sbi, SBI_CP_DISABLED) &&
+			f2fs_is_checkpointed_data(sbi, fio->old_blkaddr)))
+			return true;
+	}
+	return false;
+}
+
+static inline bool need_inplace_update(struct f2fs_io_info *fio)
+{
+	struct inode *inode = fio->page->mapping->host;
+
+	if (f2fs_should_update_outplace(inode, fio))
+		return false;
+
+	return f2fs_should_update_inplace(inode, fio);
+}
+
+int f2fs_do_write_data_page(struct f2fs_io_info *fio)
+{
+	struct page *page = fio->page;
+	struct inode *inode = page->mapping->host;
+	struct dnode_of_data dn;
+	struct extent_info ei = {0,0,0};
+	struct node_info ni;
+	bool ipu_force = false;
+	int err = 0;
+
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	if (need_inplace_update(fio) &&
+			f2fs_lookup_extent_cache(inode, page->index, &ei)) {
+		fio->old_blkaddr = ei.blk + page->index - ei.fofs;
+
+		if (!f2fs_is_valid_blkaddr(fio->sbi, fio->old_blkaddr,
+						DATA_GENERIC_ENHANCE))
+			return -EFSCORRUPTED;
+
+		ipu_force = true;
+		fio->need_lock = LOCK_DONE;
+		goto got_it;
+	}
+
+	/* Deadlock due to between page->lock and f2fs_lock_op */
+	if (fio->need_lock == LOCK_REQ && !f2fs_trylock_op(fio->sbi))
+		return -EAGAIN;
+
+	err = f2fs_get_dnode_of_data(&dn, page->index, LOOKUP_NODE);
+	if (err)
+		goto out;
+
+	fio->old_blkaddr = dn.data_blkaddr;
+
+	/* This page is already truncated */
+	if (fio->old_blkaddr == NULL_ADDR) {
+		ClearPageUptodate(page);
+		clear_cold_data(page);
+		goto out_writepage;
+	}
+got_it:
+	if (__is_valid_data_blkaddr(fio->old_blkaddr) &&
+		!f2fs_is_valid_blkaddr(fio->sbi, fio->old_blkaddr,
+						DATA_GENERIC_ENHANCE)) {
+		err = -EFSCORRUPTED;
+		goto out_writepage;
+	}
+	/*
 	 * If current allocation needs SSR,
 	 * it had better in-place writes for updated data.
 	 */
@@ -2140,6 +2308,126 @@ static sector_t f2fs_bmap(struct address_space *mapping, sector_t block)
 	}
 	return generic_block_bmap(mapping, block, get_data_block_bmap);
 }
+
+#ifdef CONFIG_SWAP
+/* Copied from generic_swapfile_activate() to check any holes */
+static int check_swap_activate(struct file *swap_file, unsigned int max)
+{
+	struct address_space *mapping = swap_file->f_mapping;
+	struct inode *inode = mapping->host;
+	unsigned blocks_per_page;
+	unsigned long page_no;
+	unsigned blkbits;
+	sector_t probe_block;
+	sector_t last_block;
+	sector_t lowest_block = -1;
+	sector_t highest_block = 0;
+
+	blkbits = inode->i_blkbits;
+	blocks_per_page = PAGE_SIZE >> blkbits;
+
+	/*
+	 * Map all the blocks into the extent list.  This code doesn't try
+	 * to be very smart.
+	 */
+	probe_block = 0;
+	page_no = 0;
+	last_block = i_size_read(inode) >> blkbits;
+	while ((probe_block + blocks_per_page) <= last_block && page_no < max) {
+		unsigned block_in_page;
+		sector_t first_block;
+
+		cond_resched();
+
+		first_block = bmap(inode, probe_block);
+		if (first_block == 0)
+			goto bad_bmap;
+
+		/*
+		 * It must be PAGE_SIZE aligned on-disk
+		 */
+		if (first_block & (blocks_per_page - 1)) {
+			probe_block++;
+			goto reprobe;
+		}
+
+		for (block_in_page = 1; block_in_page < blocks_per_page;
+					block_in_page++) {
+			sector_t block;
+
+			block = bmap(inode, probe_block + block_in_page);
+			if (block == 0)
+				goto bad_bmap;
+			if (block != first_block + block_in_page) {
+				/* Discontiguity */
+				probe_block++;
+				goto reprobe;
+			}
+		}
+
+		first_block >>= (PAGE_SHIFT - blkbits);
+		if (page_no) {	/* exclude the header page */
+			if (first_block < lowest_block)
+				lowest_block = first_block;
+			if (first_block > highest_block)
+				highest_block = first_block;
+		}
+
+		page_no++;
+		probe_block += blocks_per_page;
+reprobe:
+		continue;
+	}
+	return 0;
+
+bad_bmap:
+	pr_err("swapon: swapfile has holes\n");
+	return -EINVAL;
+}
+
+static int f2fs_swap_activate(struct swap_info_struct *sis, struct file *file,
+				sector_t *span)
+{
+	struct inode *inode = file_inode(file);
+	int ret;
+
+	if (!S_ISREG(inode->i_mode))
+		return -EINVAL;
+
+	if (f2fs_readonly(F2FS_I_SB(inode)->sb))
+		return -EROFS;
+
+	ret = f2fs_convert_inline_inode(inode);
+	if (ret)
+		return ret;
+
+	ret = check_swap_activate(file, sis->max);
+	if (ret)
+		return ret;
+
+	set_inode_flag(inode, FI_PIN_FILE);
+	f2fs_precache_extents(inode);
+	f2fs_update_time(F2FS_I_SB(inode), REQ_TIME);
+	return 0;
+}
+
+static void f2fs_swap_deactivate(struct file *file)
+{
+	struct inode *inode = file_inode(file);
+
+	clear_inode_flag(inode, FI_PIN_FILE);
+}
+#else
+static int f2fs_swap_activate(struct swap_info_struct *sis, struct file *file,
+				sector_t *span)
+{
+	return -EOPNOTSUPP;
+}
+
+static void f2fs_swap_deactivate(struct file *file)
+{
+}
+#endif
 
 #ifdef CONFIG_SWAP
 /* Copied from generic_swapfile_activate() to check any holes */

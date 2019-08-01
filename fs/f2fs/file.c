@@ -1303,9 +1303,6 @@ static int expand_inode_data(struct inode *inode, loff_t offset,
 	if (f2fs_is_pinned_file(inode))
 		map.m_seg_type = CURSEG_COLD_DATA;
 
-	if (f2fs_is_pinned_file(inode))
-		map.m_seg_type = CURSEG_COLD_DATA;
-
 	err = f2fs_map_blocks(inode, &map, 1, (f2fs_is_pinned_file(inode) ?
 						F2FS_GET_BLOCK_PRE_DIO :
 						F2FS_GET_BLOCK_PRE_AIO));
@@ -1437,6 +1434,27 @@ static int f2fs_setflags_common(struct inode *inode, u32 iflags, u32 mask)
 			return -EPERM;
 
 	fi->i_flags = iflags | (oldflags & ~mask);
+
+	if (fi->i_flags & F2FS_PROJINHERIT_FL)
+		set_inode_flag(inode, FI_PROJ_INHERIT);
+	else
+		clear_inode_flag(inode, FI_PROJ_INHERIT);
+
+	inode->i_ctime = current_time(inode);
+	f2fs_set_inode_flags(inode);
+	f2fs_mark_inode_dirty_sync(inode, true);
+	return 0;
+}
+
+static int f2fs_setflags_common(struct inode *inode, u32 iflags, u32 mask)
+{
+	struct f2fs_inode_info *fi = F2FS_I(inode);
+
+	/* Is it quota file? Do not allow user to mess with it */
+	if (IS_NOQUOTA(inode))
+		return -EPERM;
+
+	fi->i_flags = iflags | (fi->i_flags & ~mask);
 
 	if (fi->i_flags & F2FS_PROJINHERIT_FL)
 		set_inode_flag(inode, FI_PROJ_INHERIT);
@@ -2224,6 +2242,27 @@ static int f2fs_ioc_set_pin_file(struct file *filp, unsigned long arg)
 		return -EFAULT;
 
 	return 0;
+}
+
+static int f2fs_ioc_resize_fs(struct file *filp, unsigned long arg)
+{
+	struct f2fs_sb_info *sbi = F2FS_I_SB(file_inode(filp));
+	__u64 block_count;
+	int ret;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (f2fs_readonly(sbi->sb))
+		return -EROFS;
+
+	if (copy_from_user(&block_count, (void __user *)arg,
+			   sizeof(block_count)))
+		return -EFAULT;
+
+	ret = f2fs_resize_fs(sbi, block_count);
+
+	return ret;
 }
 
 static int f2fs_ioc_resize_fs(struct file *filp, unsigned long arg)
