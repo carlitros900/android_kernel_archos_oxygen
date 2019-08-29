@@ -3,14 +3,7 @@ MTK_PLATFORM := $(subst ",,$(CONFIG_MTK_PLATFORM))
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
 subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/$(MTK_PLATFORM)/include
 
-ccflags-y += -I$(srctree)/drivers/staging/android/ion
-MTK_PLATFORM:= $(subst ",,$(CONFIG_MTK_PLATFORM))
-subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include
-subdir-ccflags-y += -I$(srctree)/drivers/misc/mediatek/video/$(MTK_PLATFORM)/videox/
-ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
-
-obj-$(CONFIG_ION)			+= ion/
-obj-$(CONFIG_FIQ_DEBUGGER)		+= fiq_debugger/
+obj-y					+= ion/
 
 obj-$(CONFIG_ANDROID_BINDER_IPC)	+= binder.o
 obj-$(CONFIG_ASHMEM)			+= ashmem.o
