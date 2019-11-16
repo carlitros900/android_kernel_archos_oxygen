@@ -191,12 +191,9 @@ errout:
 	return ret;
 }
 
-
 static const struct vm_operations_struct ext4_file_vm_ops = {
 	.fault		= filemap_fault,
-#if 0
 	.map_pages	= filemap_map_pages,
-#endif
 	.page_mkwrite   = ext4_page_mkwrite,
 	.remap_pages	= generic_file_remap_pages,
 };
@@ -609,9 +606,7 @@ const struct inode_operations ext4_file_inode_operations = {
 	.listxattr	= ext4_listxattr,
 	.removexattr	= generic_removexattr,
 	.get_acl	= ext4_get_acl,
-#if 0
 	.set_acl	= ext4_set_acl,
-#endif
 	.fiemap		= ext4_fiemap,
 };
 

@@ -1234,9 +1234,9 @@ static inline int ext4_match(struct ext4_filename *fname,
 	if (unlikely(!name)) {
 		if (fname->usr_fname->name[0] == '_') {
 			int ret;
-			if (de->name_len < 16)
+			if (de->name_len <= 32)
 				return 0;
-			ret = memcmp(de->name + de->name_len - 16,
+			ret = memcmp(de->name + ((de->name_len - 17) & ~15),
 				     fname->crypto_buf.name + 8, 16);
 			return (ret == 0) ? 1 : 0;
 		}
@@ -1552,6 +1552,24 @@ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, unsi
 	struct inode *inode;
 	struct ext4_dir_entry_2 *de;
 	struct buffer_head *bh;
+
+       if (ext4_encrypted_inode(dir)) {
+               int res = ext4_get_encryption_info(dir);
+
+		/*
+		 * This should be a properly defined flag for
+		 * dentry->d_flags when we uplift this to the VFS.
+		 * d_fsdata is set to (void *) 1 if if the dentry is
+		 * created while the directory was encrypted and we
+		 * don't have access to the key.
+		 */
+	       dentry->d_fsdata = NULL;
+	       if (ext4_encryption_info(dir))
+		       dentry->d_fsdata = (void *) 1;
+	       d_set_d_op(dentry, &ext4_encrypted_d_ops);
+	       if (res && res != -ENOKEY)
+		       return ERR_PTR(res);
+       }
 
 	if (dentry->d_name.len > EXT4_NAME_LEN)
 		return ERR_PTR(-ENAMETOOLONG);
@@ -2107,6 +2125,7 @@ static int ext4_add_entry(handle_t *handle, struct dentry *dentry,
 			bh = NULL;
 			goto out;
 		}
+
 		retval = add_dirent_to_buf(handle, &fname, dir, inode,
 					   NULL, bh);
 		if (retval != -ENOSPC)
@@ -2487,7 +2506,6 @@ retry:
 	return err;
 }
 
-#if 0
 static int ext4_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
 	handle_t *handle;
@@ -2525,7 +2543,6 @@ err_unlock_inode:
 	unlock_new_inode(inode);
 	return err;
 }
-#endif
 
 struct ext4_dir_entry_2 *ext4_init_dot_dotdot(struct inode *inode,
 			  struct ext4_dir_entry_2 *de,
@@ -3117,6 +3134,7 @@ static int ext4_symlink(struct inode *dir,
 
 	if ((disk_link.len > EXT4_N_BLOCKS * 4)) {
 		inode->i_op = &ext4_symlink_inode_operations;
+		inode_nohighmem(inode);
 		ext4_set_aops(inode);
 		/*
 		 * We cannot call page_symlink() with transaction started
@@ -3401,7 +3419,6 @@ static void ext4_rename_delete(handle_t *handle, struct ext4_renament *ent,
 	}
 }
 
-#if 0
 static void ext4_update_dir_count(handle_t *handle, struct ext4_renament *ent)
 {
 	if (ent->dir_nlink_delta) {
@@ -3445,7 +3462,6 @@ retry:
 	}
 	return wh;
 }
-#endif
 
 /*
  * Anybody can rename anything with this: the permission checks are left to the
@@ -3523,16 +3539,13 @@ static int ext4_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	credits = (2 * EXT4_DATA_TRANS_BLOCKS(old.dir->i_sb) +
 		   EXT4_INDEX_EXTRA_TRANS_BLOCKS + 2);
-#if 0
 	if (!(flags & RENAME_WHITEOUT)) {
-#endif
 		handle = ext4_journal_start(old.dir, EXT4_HT_DIR, credits);
 		if (IS_ERR(handle)) {
 			retval = PTR_ERR(handle);
 			handle = NULL;
 			goto end_rename;
 		}
-#if 0
 	} else {
 		whiteout = ext4_whiteout_for_rename(&old, credits, &handle);
 		if (IS_ERR(whiteout)) {
@@ -3541,7 +3554,6 @@ static int ext4_rename(struct inode *old_dir, struct dentry *old_dentry,
 			goto end_rename;
 		}
 	}
-#endif
 
 	if (IS_DIRSYNC(old.dir) || IS_DIRSYNC(new.dir))
 		ext4_handle_sync(handle);
@@ -3656,7 +3668,6 @@ end_rename:
 	return retval;
 }
 
-#if 0
 static int ext4_cross_rename(struct inode *old_dir, struct dentry *old_dentry,
 			     struct inode *new_dir, struct dentry *new_dentry)
 {
@@ -3791,12 +3802,20 @@ end_rename:
 		ext4_journal_stop(handle);
 	return retval;
 }
-#endif
 
 static int ext4_rename2(struct inode *old_dir, struct dentry *old_dentry,
-			struct inode *new_dir, struct dentry *new_dentry)
+			struct inode *new_dir, struct dentry *new_dentry,
+			unsigned int flags)
 {
-	return ext4_rename(old_dir, old_dentry, new_dir, new_dentry, 0);
+	if (flags & ~(RENAME_NOREPLACE | RENAME_EXCHANGE | RENAME_WHITEOUT))
+		return -EINVAL;
+
+	if (flags & RENAME_EXCHANGE) {
+		return ext4_cross_rename(old_dir, old_dentry,
+					 new_dir, new_dentry);
+	}
+
+	return ext4_rename(old_dir, old_dentry, new_dir, new_dentry, flags);
 }
 
 /*
@@ -3811,19 +3830,15 @@ const struct inode_operations ext4_dir_inode_operations = {
 	.mkdir		= ext4_mkdir,
 	.rmdir		= ext4_rmdir,
 	.mknod		= ext4_mknod,
-#if 0
 	.tmpfile	= ext4_tmpfile,
-#endif
-	.rename		= ext4_rename2,
+	.rename2	= ext4_rename2,
 	.setattr	= ext4_setattr,
 	.setxattr	= generic_setxattr,
 	.getxattr	= generic_getxattr,
 	.listxattr	= ext4_listxattr,
 	.removexattr	= generic_removexattr,
 	.get_acl	= ext4_get_acl,
-#if 0
 	.set_acl	= ext4_set_acl,
-#endif
 	.fiemap         = ext4_fiemap,
 };
 
@@ -3834,7 +3849,5 @@ const struct inode_operations ext4_special_inode_operations = {
 	.listxattr	= ext4_listxattr,
 	.removexattr	= generic_removexattr,
 	.get_acl	= ext4_get_acl,
-#if 0
 	.set_acl	= ext4_set_acl,
-#endif
 };

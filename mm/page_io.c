@@ -325,10 +325,6 @@ int __swap_writepage(struct page *page, struct writeback_control *wbc,
 	}
 	if (wbc->sync_mode == WB_SYNC_ALL)
 		rw |= REQ_SYNC;
-
-	/* mlog */
-	current->swap_out++;
-
 	count_vm_event(PSWPOUT);
 	set_page_writeback(page);
 	unlock_page(page);
@@ -356,22 +352,14 @@ int swap_readpage(struct page *page)
 		struct address_space *mapping = swap_file->f_mapping;
 
 		ret = mapping->a_ops->readpage(swap_file, page);
-		if (!ret) {
+		if (!ret)
 			count_vm_event(PSWPIN);
-
-			/* mlog */
-			current->swap_in++;
-		}
 		return ret;
 	}
 
 	ret = bdev_read_page(sis->bdev, swap_page_sector(page), page);
 	if (!ret) {
 		count_vm_event(PSWPIN);
-
-		/* mlog */
-		current->swap_in++;
-
 		return 0;
 	}
 
@@ -382,10 +370,6 @@ int swap_readpage(struct page *page)
 		ret = -ENOMEM;
 		goto out;
 	}
-
-	/* mlog */
-	current->swap_in++;
-
 	count_vm_event(PSWPIN);
 	submit_bio(READ, bio);
 out:

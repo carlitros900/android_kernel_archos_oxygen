@@ -52,16 +52,17 @@ struct bdi_writeback {
 	unsigned long last_old_flush;	/* last old data flush */
 
 	struct delayed_work dwork;	/* work item used for writeback */
-    atomic_t dirty_sleeping;    /* waiting on dirty limit exceed */    
 	struct list_head b_dirty;	/* dirty inodes */
 	struct list_head b_io;		/* parked for writeback */
 	struct list_head b_more_io;	/* parked for more writeback */
+	struct list_head b_dirty_time;	/* time stamps are dirty */
 	spinlock_t list_lock;		/* protects the b_* lists */
 };
 
 struct backing_dev_info {
 	struct list_head bdi_list;
 	unsigned long ra_pages;	/* max readahead in PAGE_CACHE_SIZE units */
+	unsigned long io_pages;	/* max allowed IO size */
 	unsigned long state;	/* Always use atomic bitops on this */
 	unsigned int capabilities; /* Device capabilities */
 	congested_fn *congested_fn; /* Function pointer if device is md/dm */

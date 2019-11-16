@@ -47,10 +47,6 @@
 #include <asm/tlb.h>
 #include <asm/mmu_context.h>
 
-#ifdef CONFIG_MTK_EXTMEM
-#include <linux/exm_driver.h>
-#endif
-
 #include "internal.h"
 
 #ifndef arch_mmap_check
@@ -60,6 +56,18 @@
 #ifndef arch_rebalance_pgtables
 #define arch_rebalance_pgtables(addr, len)		(addr)
 #endif
+
+#ifdef CONFIG_HAVE_ARCH_MMAP_RND_BITS
+const int mmap_rnd_bits_min = CONFIG_ARCH_MMAP_RND_BITS_MIN;
+const int mmap_rnd_bits_max = CONFIG_ARCH_MMAP_RND_BITS_MAX;
+int mmap_rnd_bits __read_mostly = CONFIG_ARCH_MMAP_RND_BITS;
+#endif
+#ifdef CONFIG_HAVE_ARCH_MMAP_RND_COMPAT_BITS
+const int mmap_rnd_compat_bits_min = CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MIN;
+const int mmap_rnd_compat_bits_max = CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MAX;
+int mmap_rnd_compat_bits __read_mostly = CONFIG_ARCH_MMAP_RND_COMPAT_BITS;
+#endif
+
 
 static void unmap_region(struct mm_struct *mm,
 		struct vm_area_struct *vma, struct vm_area_struct *prev,
@@ -2619,12 +2627,6 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len)
 	prev = vma->vm_prev;
 	/* we have  start < vma->vm_end  */
 
-#ifdef CONFIG_MTK_EXTMEM
-	/* get correct mmap size if in mspace. */
-	if (extmem_in_mspace(vma))
-		len = extmem_get_mem_size(vma->vm_pgoff);
-#endif
-
 	/* if it doesn't overlap, we have nothing.. */
 	end = start + len;
 	if (vma->vm_start >= end)
@@ -2688,6 +2690,7 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len)
 
 	return 0;
 }
+EXPORT_SYMBOL(do_munmap);
 
 int vm_munmap(unsigned long start, size_t len)
 {
