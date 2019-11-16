@@ -2596,38 +2596,6 @@ static void binder_transaction(struct binder_proc *proc,
 	t->policy = current->policy;
 	t->saved_rt_prio = MAX_RT_PRIO;
 #endif
-	if (!(t->flags & TF_ONE_WAY) &&
-	    binder_supported_policy(current->policy)) {
-		/* Inherit supported policies for synchronous transactions */
-		t->priority.sched_policy = current->policy;
-		t->priority.prio = current->normal_prio;
-	} else {
-		/* Otherwise, fall back to the default priority */
-		t->priority = target_proc->default_priority;
-	}
-
-	if (target_node && target_node->txn_security_ctx) {
-		u32 secid;
-		size_t added_size;
-
-		security_task_getsecid(proc->tsk, &secid);
-		ret = security_secid_to_secctx(secid, &secctx, &secctx_sz);
-		if (ret) {
-			return_error = BR_FAILED_REPLY;
-			return_error_param = ret;
-			return_error_line = __LINE__;
-			goto err_get_secctx_failed;
-		}
-		added_size = ALIGN(secctx_sz, sizeof(u64));
-		extra_buffers_size += added_size;
-		if (extra_buffers_size < added_size) {
-			/* integer overflow of extra_buffers_size */
-			return_error = BR_FAILED_REPLY;
-			return_error_param = EINVAL;
-			return_error_line = __LINE__;
-			goto err_bad_extra_size;
-		}
-	}
 
 	trace_binder_transaction(reply, t, target_node);
 
@@ -2977,10 +2945,6 @@ err_copy_data_failed:
 	t->buffer->transaction = NULL;
 	binder_free_buf(target_proc, t->buffer);
 err_binder_alloc_buf_failed:
-err_bad_extra_size:
-	if (secctx)
-		security_release_secctx(secctx, secctx_sz);
-err_get_secctx_failed:
 	kfree(tcomplete);
 	binder_stats_deleted(BINDER_STAT_TRANSACTION_COMPLETE);
 err_alloc_tcomplete_failed:
