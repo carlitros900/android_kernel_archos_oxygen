@@ -37,6 +37,7 @@ EXPORT_SYMBOL(ipanic_kmsg_dump3);
 
 void ipanic_klog_region(struct kmsg_dumper *dumper)
 {
+#ifdef CONFIG_PRINTK
 	static struct ipanic_log_index next = { 0 };
 
 	dumper->cur_idx = next.seq ? next.idx : log_first_idx;
@@ -47,6 +48,7 @@ void ipanic_klog_region(struct kmsg_dumper *dumper)
 	next.seq = log_next_seq;
 	LOGD("kernel log region: [%x:%llx,%x:%llx]", dumper->cur_idx, dumper->cur_seq,
 	     dumper->next_idx, dumper->next_seq);
+#endif
 }
 
 int ipanic_klog_buffer(void *data, unsigned char *buffer, size_t sz_buf)

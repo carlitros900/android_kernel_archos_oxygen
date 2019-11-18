@@ -534,6 +534,7 @@ EXPORT_SYMBOL(mrdump_mini_ke_cpu_regs);
 
 static void mrdump_mini_build_elf_misc(void)
 {
+#ifdef CONFIG_PRINTK
 	int i;
 	struct mrdump_mini_elf_misc misc;
 	char log_type[][16] = { "_MAIN_LOG_", "_EVENTS_LOG_", "_RADIO_LOG_", "_SYSTEM_LOG_" };
@@ -564,6 +565,7 @@ static void mrdump_mini_build_elf_misc(void)
 		get_android_log_buffer(&misc.vaddr, &misc.size, &misc.start, i + 1);
 		mrdump_mini_add_misc(misc.vaddr, misc.size, misc.start, log_type[i]);
 	}
+#endif
 }
 
 static void mrdump_mini_add_loads(void)

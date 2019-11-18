@@ -9,10 +9,12 @@ struct ipanic_log_index {
 	u64 seq;
 };
 
+#ifdef CONFIG_PRINTK
 extern u32 log_first_idx;
 extern u64 log_first_seq;
 extern u32 log_next_idx;
 extern u64 log_next_seq;
+#endif
 int ipanic_kmsg_dump3(struct kmsg_dumper *dumper, char *buf, size_t len);
 
 #endif

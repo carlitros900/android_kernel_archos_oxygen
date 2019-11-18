@@ -195,7 +195,11 @@ struct ipanic_atf_log_rec {
 #endif
 
 #ifndef __LOG_BUF_LEN
+#ifdef CONFIG_LOG_BUF_SHIFT
 #define __LOG_BUF_LEN	(1 << CONFIG_LOG_BUF_SHIFT)
+#else
+#define __LOG_BUF_LEN	(0)
+#endif
 #endif
 
 #define OOPS_LOG_LEN	__LOG_BUF_LEN
